@@ -450,6 +450,49 @@
   </div>
 </div>
 
+
+<!-- View tenant (read-only complete details) -->
+<div class="modal fade" id="viewTenantModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0" id="viewTenantTitle">Tenant details</h5>
+          <div class="small text-muted-soft" id="viewTenantSub"></div>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="viewTenantBody"><div class="text-center py-5 text-muted-soft">Loading…</div></div>
+      <div class="modal-footer" id="viewTenantFooter"><button class="btn btn-outline-brand" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Block tenant -->
+<div class="modal fade" id="blockTenantModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-slash-circle text-danger me-2"></i>Block tenant</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body">
+        <p class="mb-2">You are blocking <strong id="blockTenantName"></strong>. They will be signed out of the app and cannot log in until you unblock them.</p>
+        <label class="form-label fw-semibold" for="blockReason">Reason <span class="text-danger">*</span></label>
+        <select class="form-select mb-2" id="blockReasonPreset">
+          <option value="">Choose a common reason…</option>
+          <option>Documents not submitted</option>
+          <option>Rent / dues not paid</option>
+          <option>Violation of PG rules</option>
+          <option>Agreement not accepted</option>
+          <option value="__other">Other (type below)</option>
+        </select>
+        <textarea class="form-control" id="blockReason" rows="3" maxlength="500" placeholder="This text is shown to the tenant in the app"></textarea>
+        <div class="small text-muted-soft mt-1">The tenant will see: “Your account has been blocked by the Livinkey admin. Reason: …”</div>
+        <div class="text-danger small mt-2 d-none" id="blockError"></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-outline-brand" data-bs-dismiss="modal">Cancel</button><button class="btn btn-soft-danger" id="blockConfirmBtn"><i class="bi bi-slash-circle me-1"></i>Block tenant</button></div>
+    </div>
+  </div>
+</div>
+
 <!-- Delete Confirmation Modal -->
 <div class="modal fade" id="confirmModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">

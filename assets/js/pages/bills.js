@@ -1521,22 +1521,27 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        // Rent always comes from each TENANT's own recorded rent (not the PG/room list price).
         const recordedTotal = tenants.reduce((sum, t) => sum + Number(t.rent || 0), 0);
-        const roomRent = Number(tenants[0].room_rent || 0) > 0 ? Number(tenants[0].room_rent) : recordedTotal;
-        const rent = mode === "split" ? (roomRent / tenants.length) : roomRent;
-        rentEl.value = rent.toFixed(2);
+        const roomRent = recordedTotal;
+        rentEl.value = (tenants.length === 1 ? Number(tenants[0].rent || 0) : recordedTotal).toFixed(2);
+        rentEl.readOnly = true;
+        rentEl.title = "Rent is taken from the tenant's recorded rent";
 
         const electricity = Number(document.getElementById("billElectricity")?.value || 0);
         const maintenance = Number(document.getElementById("billMaintenance")?.value || 0);
         const other = Number(document.getElementById("billOther")?.value || 0);
         const roomTotal = roomRent + electricity + maintenance + other;
-        const perTenantTotal = roomTotal / tenants.length;
+        const sharedExtras = (electricity + maintenance + other) / tenants.length;
 
         if (notice && tenants.length > 1) {
             notice.classList.remove("d-none");
-            notice.textContent = mode === "full"
-                ? `Full room bill: ${fmtINR(roomTotal)}. Any one tenant's verified payment settles the shared bill for all ${tenants.length} tenants.`
-                : `Split room bill: ${fmtINR(roomTotal)} ÷ ${tenants.length} tenants ≈ ${fmtINR(perTenantTotal)} each. Rent, electricity, maintenance and other charges are all split.`;
+            if (mode === "full") {
+                notice.textContent = `Full room bill: ${fmtINR(roomTotal)} (sum of each tenant's own rent ${fmtINR(roomRent)} + charges). Any one tenant's verified payment settles the shared bill for all ${tenants.length} tenants.`;
+            } else {
+                const lines = tenants.map(t => `${t.full_name}: rent ${fmtINR(Number(t.rent || 0))} + share ${fmtINR(sharedExtras)} = ${fmtINR(Number(t.rent || 0) + sharedExtras)}`);
+                notice.textContent = `Split room bill. Each tenant pays their own rent; electricity, maintenance and other charges are split equally. ${lines.join(' | ')}`;
+            }
         } else if (notice) {
             notice.classList.add("d-none");
         }
@@ -1563,11 +1568,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // The form fields are room-level amounts for a shared room. In Split
         // mode the preview must match the actual per-tenant bill, not only split rent.
         let total = rent + elec + maint + other;
-        if (mode === "split" && tenants.length > 1) {
-            const recordedTotal = tenants.reduce((sum, t) => sum + Number(t.rent || 0), 0);
-            const roomRent = Number(tenants[0].room_rent || 0) > 0 ? Number(tenants[0].room_rent) : recordedTotal;
-            total = (roomRent + elec + maint + other) / tenants.length;
-        }
+        // Split mode: the preview shows the room total (see the per-tenant lines in the notice above).
         document.getElementById("billTotalDisplay").textContent = fmtINR(total);
     }
 

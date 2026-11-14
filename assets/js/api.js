@@ -489,6 +489,9 @@ const API = {
         },
         getById: (id) => 
             apiRequest(`/tenants/${id}`, 'GET'),
+        getFull: (id) => apiRequest(`/tenants/${id}/full`, 'GET'),
+        block: (id, reason) => apiRequest(`/tenants/${id}/block`, 'POST', { reason }),
+        unblock: (id) => apiRequest(`/tenants/${id}/unblock`, 'POST', {}),
         update: (id, data, files) => {
             const formData = new FormData();
             Object.keys(data).forEach(k => formData.append(k, data[k]));
@@ -617,6 +620,7 @@ const API = {
 
 
     activityLogs: {
+        recheckInstalls: (tenantId) => apiRequest('/activity-logs/recheck-installs', 'POST', tenantId ? { tenant_id: tenantId } : {}),
         users: (params = {}) => {
             const qs = new URLSearchParams();
             Object.keys(params).forEach(k => { if (params[k] !== undefined && params[k] !== null && params[k] !== '') qs.append(k, params[k]); });
@@ -1131,6 +1135,8 @@ const API = {
 
     // ---- Electricity formula ----
     electricity: {
+        readings: (p) => apiRequest('/electricity/readings' + lkQS(p), 'GET'),
+        deleteReadings: (body) => apiRequest('/electricity/readings/delete', 'POST', body),
         settings: () => apiRequest('/electricity/settings', 'GET'),
         save: (pgId, d) => apiRequest(`/electricity/settings/${pgId}`, 'PUT', d),
         copy: (pgId, ids) => apiRequest(`/electricity/settings/${pgId}/copy`, 'POST', { target_pg_ids: ids }),

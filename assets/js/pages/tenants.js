@@ -650,6 +650,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (u && u.id != null) {
                     map[String(u.id)] = {
                         installed: !!u.installed,
+                        logged_in: !!u.logged_in,
+                        uninstalled: !!u.uninstalled,
+                        app_version: u.app_version || null,
                         last_app_activity: u.last_app_activity || null
                     };
                 }
@@ -684,6 +687,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     const a = appActivityByTenantId[String(t.id)];
                     if (a) {
                         t._app_installed = a.installed;
+                        t._app_logged_in = a.logged_in;
+                        t._app_uninstalled = a.uninstalled;
+                        t._app_version = a.app_version;
                         t._last_app_activity = a.last_app_activity;
                     }
                 });
@@ -1025,9 +1031,12 @@ document.addEventListener("DOMContentLoaded", () => {
             // App status from merged activity-logs data (existing endpoint)
             let appChip = '<span class="chip chip-gray">—</span>';
             if (t._app_installed === true) {
-                appChip = '<span class="chip chip-green"><i class="bi bi-phone"></i> Installed</span>';
+                appChip = '<span class="chip chip-green"><i class="bi bi-phone"></i> Installed</span>' +
+                    (t._app_logged_in === false ? ' <span class="chip chip-amber" title="App is on the phone, but the tenant is logged out">Logged out</span>' : '');
+            } else if (t._app_uninstalled === true) {
+                appChip = '<span class="chip chip-red" title="The phone no longer has the app"><i class="bi bi-phone-slash"></i> Uninstalled</span>';
             } else if (t._app_installed === false) {
-                appChip = '<span class="chip chip-gray"><i class="bi bi-phone-slash"></i> Not Installed</span>';
+                appChip = '<span class="chip chip-gray" title="Never opened the app"><i class="bi bi-phone-slash"></i> Not Installed</span>';
             }
             let lastAct = '—';
             if (t._last_app_activity) {
@@ -1042,7 +1051,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return `
             <tr data-id="${X(t.id)}">
                 <td>
-                    <span class="name-link" onclick="openDocs('${X(t.id)}')">${X(t.full_name) || '—'}</span>
+                    <span class="name-link" onclick="openDocs('${X(t.id)}')">${X(t.full_name) || '—'}</span>${Number(t.is_blocked) === 1 ? ` <span class="chip chip-red" title="${X(t.block_reason || '')}"><i class="bi bi-slash-circle"></i> Blocked</span>` : ''}
                     <div class="small text-muted-soft">${X(t.email) || '—'}</div><div class="small text-muted-soft">Parent: ${X(t.parent_phone) || '—'}</div>
                 </td>
                 <td>${X(t.pg_name) || '—'}</td>
@@ -1060,9 +1069,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td>${appChip}</td>
                 <td>${LKUI.seen(t._last_app_activity, { never: 'Never opened' })}</td>
                 <td class="text-end text-nowrap">
+                    ${canViewTenants ? `<button class="btn-icon me-1" title="View complete details" onclick="viewTenant('${X(t.id)}')"><i class="bi bi-eye"></i></button>` : ''}
                     <a class="btn-icon me-1" title="View bills" href="bills.html?q=${encodeURIComponent(t.full_name || '')}"><i class="bi bi-receipt"></i></a>
                     ${t.agreement_status === 'accepted' ? `<button class="btn-icon me-1" title="Download current accepted agreement PDF" onclick="downloadTenantAgreement('${t.id}')"><i class="bi bi-file-earmark-pdf"></i></button>` : ''}
                     ${canEditTenants ? `<button class="btn-icon me-1" title="Edit" onclick="editTenant('${t.id}')"><i class="bi bi-pencil"></i></button>` : ''}
+                    ${canEditTenants ? (Number(t.is_blocked) === 1
+                        ? `<button class="btn-icon me-1" title="Unblock tenant" onclick="unblockTenant('${t.id}')"><i class="bi bi-unlock"></i></button>`
+                        : `<button class="btn-icon me-1" title="Block tenant" onclick="blockTenant('${t.id}')"><i class="bi bi-slash-circle"></i></button>`) : ''}
                     ${canDeleteTenants ? `<button class="btn-icon me-1" title="Check Out" onclick="checkoutTenant('${t.id}')"><i class="bi bi-box-arrow-right"></i></button>
                     <button class="btn-icon" title="Archive" onclick="archiveTenant('${t.id}')"><i class="bi bi-archive"></i></button>` : ''}
                 </td>
@@ -1320,7 +1333,9 @@ document.addEventListener("DOMContentLoaded", () => {
         addTenantBtn.style.display = canAddTenants ? '' : 'none';
     }
 
-    document.querySelector('[data-bs-target="#addTenantModal"]')?.addEventListener("click", function() {
+    // Single place that prepares the "Add Tenant" modal. Used by BOTH the button click
+    // and the dashboard/search deep link (?new=1), so PGs + rooms always load.
+    function prepareAddTenantModal() {
         document.getElementById("tenantModalTitle").textContent = "Add New Tenant";
         document.getElementById("tenantForm").reset();
         document.getElementById("tenantId").value = "";
@@ -1328,12 +1343,17 @@ document.addEventListener("DOMContentLoaded", () => {
         isEditMode = false;
         editingTenantId = null;
         document.getElementById("tenantEntriesContainer").innerHTML = "";
+        const roomSel = document.getElementById("tRoom");
+        if (roomSel) roomSel.innerHTML = `<option value="">Select room...</option>`;
         loadPgDropdown("tPg");
         document.getElementById("tRole").value = "Tenant";
         toggleRoleFields();
         document.getElementById("numTenants").value = 1;
         initGuestDropdowns();
-    });
+    }
+    window.LK_prepareAddTenantModal = prepareAddTenantModal;
+
+    document.querySelector('[data-bs-target="#addTenantModal"]')?.addEventListener("click", prepareAddTenantModal);
 
     function toggleRoleFields() {
         const role = document.getElementById("tRole").value;
@@ -2468,6 +2488,140 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+
+    // ============================================
+    // VIEW (complete details) / BLOCK / UNBLOCK
+    // ============================================
+    const viewModalEl = document.getElementById("viewTenantModal");
+    const viewModal = viewModalEl ? new bootstrap.Modal(viewModalEl) : null;
+    const blockModalEl = document.getElementById("blockTenantModal");
+    const blockModal = blockModalEl ? new bootstrap.Modal(blockModalEl) : null;
+    let blockingTenantId = null;
+
+    const vx = (v) => (v === null || v === undefined || String(v).trim() === '') ? '—' : LKUI.esc(v);
+    const vdate = (d) => { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? LKUI.esc(d) : x.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); };
+    const vdt = (d) => { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? LKUI.esc(d) : x.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); };
+    const vrow = (label, value) => `<div class="col-6 col-lg-4"><div class="small text-muted-soft">${label}</div><div class="fw-semibold" style="word-break:break-word">${value}</div></div>`;
+    const vsec = (title, icon, inner) => `<div class="section-card mb-3"><div class="card-head"><div><h6 class="mb-0"><i class="bi ${icon} me-2"></i>${title}</h6></div></div><div class="row g-3">${inner}</div></div>`;
+
+    window.viewTenant = async function(id) {
+        if (!viewModal) return;
+        document.getElementById("viewTenantTitle").textContent = "Tenant details";
+        document.getElementById("viewTenantSub").textContent = "";
+        document.getElementById("viewTenantBody").innerHTML = '<div class="text-center py-5 text-muted-soft">Loading…</div>';
+        document.getElementById("viewTenantFooter").innerHTML = '<button class="btn btn-outline-brand" data-bs-dismiss="modal">Close</button>';
+        viewModal.show();
+        try {
+            const r = await API.tenants.getFull(id);
+            if (!r.success) throw new Error(r.message || "Could not load details");
+            const { tenant: t, documents, bills, roommates, agreement_status, outstanding_due, app } = r.data;
+            document.getElementById("viewTenantTitle").textContent = t.full_name || "Tenant";
+            document.getElementById("viewTenantSub").textContent = `${t.pg_name || '—'} · Room ${t.room_number || '—'}`;
+
+            const statusChip = Number(t.is_blocked) === 1
+                ? '<span class="chip chip-red"><i class="bi bi-slash-circle"></i> Blocked</span>'
+                : (t.status === 'checked_out' ? '<span class="chip chip-gray">Checked out</span>'
+                    : (Number(t.is_active) === 1 ? '<span class="chip chip-green">Active</span>' : '<span class="chip chip-gray">Inactive</span>'));
+
+            let html = '';
+            if (Number(t.is_blocked) === 1) {
+                html += `<div class="alert alert-danger"><strong><i class="bi bi-slash-circle me-1"></i>This tenant is blocked.</strong><div>Reason: ${vx(t.block_reason)}</div><div class="small">Blocked ${vdt(t.blocked_at)}${t.blocked_by_name ? ' by ' + vx(t.blocked_by_name) : ''}</div></div>`;
+            }
+            html += vsec('Personal information', 'bi-person',
+                vrow('Full name', vx(t.full_name)) + vrow('Status', statusChip) + vrow('Gender', `<span style="text-transform:capitalize">${vx(t.gender)}</span>`) +
+                vrow('Email', vx(t.email)) + vrow('Phone', vx(`${t.country_code || ''} ${t.phone || ''}`)) + vrow('International phone', vx(t.international_phone)) +
+                vrow('Parent phone', vx(t.parent_phone)) + vrow('Nationality', vx(t.nationality)) + vrow('Residency', `<span style="text-transform:capitalize">${vx(t.residency)}</span>`) +
+                vrow('Aadhaar ID', vx(t.aadhaar_id)) + vrow('Father Aadhaar ID', vx(t.father_aadhaar_id)) + vrow('Added on', vdt(t.created_at)) + vrow('Added by', vx(t.created_by_name)));
+            html += vsec('Stay & rent', 'bi-house-door',
+                vrow('PG', vx(t.pg_name)) + vrow('Room', vx(t.room_number)) + vrow('Room capacity', vx(t.capacity)) +
+                vrow('Tenant rent', fmtINR(t.rent || 0)) + vrow('Security fee', fmtINR(t.security_fee || 0)) + vrow('Payment day', t.payment_date ? 'Day ' + vx(t.payment_date) : '—') +
+                vrow('Arrival date', vdate(t.arrival_date)) + vrow('Period of stay', t.period_of_stay ? `${vx(t.period_of_stay)} month(s)` : '—') +
+                vrow('Paid from', vdate(t.paid_from)) + vrow('Paid till', vdate(t.paid_till)) +
+                vrow('Vehicle', Number(t.has_vehicle) === 1 ? vx(t.vehicle_number || 'Yes') : 'No') +
+                vrow('Roommates', roommates && roommates.length ? roommates.map(x => LKUI.esc(x.full_name)).join(', ') : 'None') +
+                vrow('Agreement', agreement_status === 'accepted' ? '<span class="chip chip-green">Accepted</span>' : agreement_status === 'pending' ? '<span class="chip chip-red">Pending</span>' : '<span class="chip chip-gray">Not required</span>') +
+                vrow('Outstanding dues', `<span class="${outstanding_due > 0 ? 'text-danger' : 'text-success'}">${fmtINR(outstanding_due || 0)}</span>`));
+            if (t.residency === 'international') {
+                html += vsec('e-FRRO / C-Form', 'bi-globe2', vrow('C-Form number', vx(t.c_form_number)) + vrow('e-FRRO from', vdate(t.efrro_from)) + vrow('e-FRRO till', vdate(t.efrro_till)));
+            }
+            const appLine = app.installed
+                ? '<span class="chip chip-green"><i class="bi bi-phone"></i> Installed</span>' + (app.logged_in ? '' : ' <span class="chip chip-amber">Logged out</span>')
+                : ((app.devices || []).some(d => d.uninstalled_at) ? '<span class="chip chip-red">Uninstalled</span>' : '<span class="chip chip-gray">Not installed</span>');
+            html += vsec('Mobile app', 'bi-phone', vrow('App status', appLine) + vrow('Last opened', vdt(app.last_opened_at)) + vrow('App version', vx(app.app_version)) + vrow('Password set by tenant', Number(t.must_change_password) === 1 ? 'Not yet (temporary password)' : 'Yes'));
+
+            const docStatus = { approved: 'chip-green', pending: 'chip-amber', rejected: 'chip-red' };
+            html += `<div class="section-card mb-3"><div class="card-head"><h6 class="mb-0"><i class="bi bi-files me-2"></i>Documents (${documents.length})</h6></div>` +
+                (documents.length ? `<div class="table-responsive"><table class="data-table mb-0"><thead><tr><th>Type</th><th>File</th><th>Status</th><th>Uploaded</th><th></th></tr></thead><tbody>` +
+                    documents.map(d => `<tr><td style="text-transform:capitalize">${vx(String(d.document_type || '').replace(/_/g, ' '))}</td><td>${vx(d.original_name)}</td><td><span class="chip ${docStatus[d.review_status] || 'chip-gray'}">${vx(d.review_status)}</span></td><td>${vdate(d.created_at)}</td><td class="text-end">${d.document_url ? `<a class="btn-icon" target="_blank" rel="noopener" href="${LKUI.esc(d.document_url)}" title="Open"><i class="bi bi-box-arrow-up-right"></i></a>` : ''}</td></tr>`).join('') +
+                    `</tbody></table></div>` : '<div class="text-muted-soft">No documents uploaded yet.</div>') + `</div>`;
+
+            const bst = { paid: 'chip-green', partially_paid: 'chip-amber', unpaid: 'chip-red', overdue: 'chip-red', delayed: 'chip-red' };
+            html += `<div class="section-card"><div class="card-head"><h6 class="mb-0"><i class="bi bi-receipt me-2"></i>Recent bills</h6><a class="small" href="bills.html?q=${encodeURIComponent(t.full_name || '')}">All bills</a></div>` +
+                (bills.length ? `<div class="table-responsive"><table class="data-table mb-0"><thead><tr><th>Month</th><th>Rent</th><th>Electricity</th><th>Maint.</th><th>Other</th><th>Fine</th><th>Total</th><th>Paid</th><th>Status</th></tr></thead><tbody>` +
+                    bills.map(b => `<tr><td>${vx(b.billing_month)}</td><td>${fmtINR(b.rent_amount || 0)}</td><td>${fmtINR(b.electricity_amount || 0)}</td><td>${fmtINR(b.maintenance_amount || 0)}</td><td>${fmtINR(b.other_charges || 0)}</td><td>${fmtINR(b.fine_amount || 0)}</td><td>${fmtINR(b.total_amount || 0)}</td><td>${fmtINR(b.paid_amount || 0)}</td><td><span class="chip ${bst[b.status] || 'chip-gray'}">${vx(String(b.status || '').replace('_', ' '))}</span></td></tr>`).join('') +
+                    `</tbody></table></div>` : '<div class="text-muted-soft">No bills yet.</div>') + `</div>`;
+
+            document.getElementById("viewTenantBody").innerHTML = html;
+            let foot = '';
+            if (canEditTenants) {
+                foot += Number(t.is_blocked) === 1
+                    ? `<button class="btn btn-outline-brand" onclick="unblockTenant('${t.id}', true)"><i class="bi bi-unlock me-1"></i>Unblock</button>`
+                    : `<button class="btn btn-soft-danger" onclick="blockTenant('${t.id}', true)"><i class="bi bi-slash-circle me-1"></i>Block</button>`;
+                foot += `<button class="btn btn-outline-brand" onclick="viewModalEditTenant('${t.id}')"><i class="bi bi-pencil me-1"></i>Edit</button>`;
+            }
+            foot += '<button class="btn btn-brand" data-bs-dismiss="modal">Close</button>';
+            document.getElementById("viewTenantFooter").innerHTML = foot;
+        } catch (e) {
+            document.getElementById("viewTenantBody").innerHTML = `<div class="text-center py-5 text-danger">${LKUI.esc(e.message || 'Could not load details')}</div>`;
+        }
+    };
+
+    window.viewModalEditTenant = function(id) { viewModal && viewModal.hide(); setTimeout(() => window.editTenant(id), 250); };
+
+    window.blockTenant = function(id, fromView) {
+        const t = (allTenants || []).find(x => String(x.id) === String(id));
+        blockingTenantId = id;
+        document.getElementById("blockTenantName").textContent = t ? t.full_name : "this tenant";
+        document.getElementById("blockReason").value = "";
+        document.getElementById("blockReasonPreset").value = "";
+        document.getElementById("blockError").classList.add("d-none");
+        if (fromView && viewModal) viewModal.hide();
+        setTimeout(() => blockModal && blockModal.show(), fromView ? 250 : 0);
+    };
+
+    document.getElementById("blockReasonPreset")?.addEventListener("change", function() {
+        const ta = document.getElementById("blockReason");
+        if (this.value && this.value !== "__other") ta.value = this.value;
+        else if (this.value === "__other") { ta.value = ""; ta.focus(); }
+    });
+
+    document.getElementById("blockConfirmBtn")?.addEventListener("click", async function() {
+        const reason = document.getElementById("blockReason").value.trim();
+        const err = document.getElementById("blockError");
+        if (reason.length < 3) { err.textContent = "Please enter the reason for blocking."; err.classList.remove("d-none"); return; }
+        this.disabled = true;
+        try {
+            const r = await API.tenants.block(blockingTenantId, reason);
+            if (!r.success) throw new Error(r.message || "Could not block");
+            blockModal.hide();
+            showToast(r.message || "Tenant blocked", "success");
+            await loadTenants();
+        } catch (e) { err.textContent = e.message || "Could not block the tenant."; err.classList.remove("d-none"); }
+        this.disabled = false;
+    });
+
+    window.unblockTenant = async function(id, fromView) {
+        const t = (allTenants || []).find(x => String(x.id) === String(id));
+        if (!confirm(`Unblock ${t ? t.full_name : 'this tenant'}? They will be able to log in again.`)) return;
+        try {
+            const r = await API.tenants.unblock(id);
+            if (!r.success) throw new Error(r.message || "Could not unblock");
+            if (fromView && viewModal) viewModal.hide();
+            showToast(r.message || "Tenant unblocked", "success");
+            await loadTenants();
+        } catch (e) { showToast(e.message || "Could not unblock the tenant", "danger"); }
+    };
+
     // ============================================
     // REFRESH + DEEP LINKS (?new=1, ?docs=pending, ?q=name)
     // ============================================
@@ -2475,7 +2629,10 @@ document.addEventListener("DOMContentLoaded", () => {
     (function deepLinks() {
         const qs = new URLSearchParams(window.location.search);
         if (qs.get('new') === '1' && canAddTenants) {
-            setTimeout(() => bootstrap.Modal.getOrCreateInstance(document.getElementById('addTenantModal')).show(), 250);
+            setTimeout(() => {
+                prepareAddTenantModal();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('addTenantModal')).show();
+            }, 250);
             history.replaceState(null, '', 'tenants.html');
         }
         if (qs.get('docs') === 'pending') {

@@ -104,6 +104,7 @@ const NAV_GROUPS = [
             { label: 'Paid', icon: 'bi-check-circle', href: 'bills.html?tab=paid' }
           ] },
         { key: 'proofs', label: 'Payment proofs', icon: 'bi-file-earmark-check', href: 'bills.html#proofs', permission: 'bills', badgeId: 'menuBadge_proofs' },
+        { key: 'meter_readings', label: 'Meter readings', icon: 'bi-speedometer2', href: 'meter-readings.html', permission: 'bills' },
         { key: 'payments', label: 'Payments', icon: 'bi-credit-card', href: 'payments.html', permission: 'bills', badgeId: 'menuBadge_payments' },
         { key: 'expenses', label: 'Expenses', icon: 'bi-wallet2', href: 'expenses.html', permission: 'expenses' }
     ]},

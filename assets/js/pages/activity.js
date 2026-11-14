@@ -70,7 +70,9 @@ document.addEventListener("DOMContentLoaded", () => {
             <td><div class="fw-semibold">${esc(u.full_name||"—")}</div><div class="small text-muted-soft">${esc(u.email||"")}</div></td>
             <td>${u.role==="guest"?"Guest":"Tenant"}</td>
             <td>${esc(u.pg_name||"—")}</td>
-            <td>${u.installed ? '<span class="badge bg-success-subtle text-success">Installed</span>' : '<span class="badge bg-secondary-subtle text-secondary">Not Installed</span>'}</td>
+            <td>${u.installed
+              ? (u.logged_in ? '<span class="badge bg-success-subtle text-success">Installed</span>' : '<span class="badge bg-success-subtle text-success">Installed</span> <span class="badge bg-warning-subtle text-warning" title="The app is on the phone but the person is logged out">Logged out</span>')
+              : (u.uninstalled ? '<span class="badge bg-danger-subtle text-danger" title="The phone no longer has the app">Uninstalled</span>' : '<span class="badge bg-secondary-subtle text-secondary" title="Never opened the app">Never installed</span>')}${u.app_version ? `<div class="small text-muted-soft">v${esc(u.app_version)}</div>` : ''}</td>
             <td>${date(u.last_app_activity)}</td>
             <td><button class="btn btn-sm btn-outline-brand" onclick="openTimeline(${u.id},'${esc(u.full_name||"User")}','${u.role}')"><i class="bi bi-clock-history me-1"></i>Timeline</button></td>
             <td class="text-end">${canMessage
@@ -142,6 +144,15 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("prevPage").addEventListener("click",()=>{if(page>1){page--;renderUsers();}});
     document.getElementById("nextPage").addEventListener("click",()=>{page++;renderUsers();});
     document.getElementById("refreshBtn").addEventListener("click",()=>{loadUsers();loadStats();});
+    document.getElementById("recheckBtn")?.addEventListener("click", async (ev) => {
+        const btn = ev.currentTarget; btn.disabled = true;
+        try {
+            const r = await API.activityLogs.recheckInstalls();
+            if (window.LKUI && LKUI.toast) LKUI.toast(r.message || "Install check complete", "success");
+            await loadUsers(); await loadStats();
+        } catch (e) { if (window.LKUI && LKUI.toast) LKUI.toast(e.message || "Could not re-check installs", "danger"); }
+        btn.disabled = false;
+    });
     document.getElementById("exportBtn").addEventListener("click",()=>API.activityLogs.export({...params(),app_status:document.getElementById("statusFilter").value,from:document.getElementById("fromDate").value,to:document.getElementById("toDate").value}));
 
     loadPGs();
