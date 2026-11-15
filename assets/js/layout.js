@@ -336,7 +336,7 @@ function doRender(activeKey, pageTitle, pageSub) {
     // ---------- notification panel ----------
     function loadNotifications() {
         const list = document.getElementById('notifList'); if (!list) return;
-        const when = (v) => { const d = LKUI.parseDate(v); return d ? d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''; };
+        const when = (v) => { const d = LKUI.parseDate(v); return d ? formatDateTime(d) : ''; };
         API.notifications.unread(20).then(res => {
             if (res.success && res.data) {
                 if (!res.data.length) list.innerHTML = '<p class="notif-empty"><i class="bi bi-check2-circle d-block fs-3 mb-1 text-brand"></i>You\'re all caught up</p>';
@@ -520,10 +520,14 @@ if (typeof window.PAGE_LOADER === 'undefined') {
         },
         table(tbody, colspan = 6, message = 'Loading...') {
             if (!tbody) return;
+            // Hide the page's separate "empty" panel (e.g. tenantsTbody -> tenantsEmpty) while loading.
+            // Never let the derived id resolve to the tbody itself (e.g. "actionsBody"), which used to
+            // hide the whole table body and made the Audit / Sign-in tables look empty.
+            tbody.classList.remove('d-none');
             const emptyId = tbody.id ? tbody.id.replace(/Tbody$/, 'Empty').replace(/tbody$/i, 'Empty') : null;
-            if (emptyId) {
+            if (emptyId && emptyId !== tbody.id) {
                 const emptyEl = document.getElementById(emptyId);
-                if (emptyEl) emptyEl.classList.add('d-none');
+                if (emptyEl && emptyEl !== tbody && !emptyEl.contains(tbody) && emptyEl.tagName !== 'TBODY') emptyEl.classList.add('d-none');
             }
             tbody.innerHTML = `<tr><td colspan="${colspan}" class="text-center py-5">${this.spinnerHtml(message)}</td></tr>`;
         },

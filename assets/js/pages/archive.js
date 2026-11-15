@@ -30,11 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function fmtDate(d) {
         if (!d) return '—';
-        try {
-            const x = new Date(d);
-            if (isNaN(x.getTime())) return String(d).slice(0, 10);
-            return x.toISOString().slice(0, 10);
-        } catch { return '—'; }
+        return formatDate(d);
     }
 
     function selectedIds() {

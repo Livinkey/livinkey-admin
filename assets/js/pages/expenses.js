@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const catLabel = (k) => (meta.categories.find(c => c.key === k) || { label: k }).label;
     const catIcon = (k) => (meta.categories.find(c => c.key === k) || { icon: 'bi-tag' }).icon;
     const METHOD = { cash: 'Cash', upi: 'UPI', bank_transfer: 'Bank transfer', card: 'Card', cheque: 'Cheque', other: 'Other' };
-    const fmtDate = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+    const fmtDate = (d) => d ? formatDate(d) : '—';
     const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
     function range() {

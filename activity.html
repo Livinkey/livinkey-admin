@@ -29,6 +29,7 @@
       <div class="d-flex gap-2">
         <button class="btn btn-outline-brand me-2" id="recheckBtn" title="Ask Firebase which phones no longer have the app"><i class="bi bi-arrow-repeat me-1"></i>Re-check installs</button>
         <button class="btn btn-outline-brand" id="exportBtn"><i class="bi bi-download me-1"></i>Export CSV</button>
+        <button class="btn btn-soft-danger" id="clearAppBtn" type="button" hidden><i class="bi bi-eraser me-1"></i>Clear app activity…</button>
         <button class="btn btn-brand" id="refreshBtn"><i class="bi bi-arrow-clockwise me-1"></i>Refresh</button>
       </div>
     </div>
@@ -80,6 +81,13 @@
  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
   <div class="modal-header"><div><h5 class="modal-title" id="timelineTitle">Activity</h5><div class="small text-muted-soft" id="timelineMeta"></div></div><button class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body"><div id="timelineBody"></div></div>
+  <div class="modal-footer justify-content-between" id="timelineFooter" hidden>
+   <span class="small text-muted-soft" id="timelineSel"></span>
+   <div class="d-flex gap-2">
+    <button class="btn btn-soft-danger btn-sm" id="tlDelSel" type="button" hidden><i class="bi bi-trash3"></i> Delete selected</button>
+    <button class="btn btn-soft-danger btn-sm" id="tlDelAll" type="button"><i class="bi bi-eraser"></i> Clear this user's activity</button>
+   </div>
+  </div>
  </div></div>
 </div>
 

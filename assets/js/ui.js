@@ -53,7 +53,7 @@
 
     function fmtDateTime(d) {
         const dt = parseDate(d); if (!dt) return '—';
-        return dt.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return window.formatDateTime ? window.formatDateTime(dt) : dt.toLocaleString('en-GB');
     }
 
     /** "Last seen" pill: green < 1 day, amber < 14 days, grey otherwise / never */
@@ -348,10 +348,18 @@
             const val = (r) => cellText(dataCells(r)[i]);
             return rows.map((r, n) => ({ r, n, v: val(r) })).sort((a, b) => {
                 const isMoney = (v) => /^[₹$]?\s?-?[\d,]+(\.\d+)?$/.test(v);
-                const isDate = (v) => /^(\d{1,2}[\s\/-][A-Za-z]{3,9}[\s,\/-]*\d{4}|\d{4}-\d{2}-\d{2})/.test(v);
+                const isDate = (v) => /^(\d{1,2}[\s\/-][A-Za-z]{3,9}[\s,\/-]*\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})/.test(v);
+                // dd/mm/yyyy[, hh:mm AM|PM] is the console-wide format; Date.parse() would read it as mm/dd.
+                const when = (v) => {
+                    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s*(\d{1,2}):(\d{2})\s*(AM|PM)?)?/i.exec(v);
+                    if (!m) return Date.parse(v);
+                    let h = Number(m[4] || 0); const ap = (m[6] || '').toUpperCase();
+                    if (ap === 'PM' && h < 12) h += 12; if (ap === 'AM' && h === 12) h = 0;
+                    return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]), h, Number(m[5] || 0)).getTime();
+                };
                 let c;
                 if (isMoney(a.v) && isMoney(b.v)) c = num(a.v) - num(b.v);
-                else if (isDate(a.v) && isDate(b.v)) c = Date.parse(a.v) - Date.parse(b.v);
+                else if (isDate(a.v) && isDate(b.v)) c = when(a.v) - when(b.v);
                 else c = a.v.localeCompare(b.v, undefined, { numeric: true, sensitivity: 'base' });
                 return (c || a.n - b.n) * dir;
             }).map(x => x.r);
@@ -494,6 +502,16 @@
     }
     window.addEventListener('online', () => setOnline(true));
     window.addEventListener('offline', () => setOnline(false));
+
+
+    // ------------------------------------------------------------ number inputs
+    // Mouse-wheel / trackpad scrolling over a focused number field must never
+    // change its value (it silently altered amounts and readings before).
+    document.addEventListener('wheel', (e) => {
+        const el = document.activeElement;
+        if (el && el.tagName === 'INPUT' && el.type === 'number' && (e.target === el)) el.blur();
+    }, { passive: true, capture: true });
+    // Arrow Up/Down keys also nudge number fields; keep that only for deliberate focus + keyboard use.
 
     // ------------------------------------------------------------ keyboard
     document.addEventListener('keydown', (e) => {

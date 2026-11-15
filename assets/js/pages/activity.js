@@ -18,9 +18,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const canMessage=Permissions.hasPermission('activity_logs','message');
     const canExport=Permissions.hasPermission('activity_logs','export');
+    const canDelete=((Auth.getSession()||{}).role==='super_admin')||Permissions.hasPermission('activity_logs','delete');
+    const tlSel=new Set(); let tlUser=null, tlRows=[];
     if(!canExport) document.getElementById('exportBtn')?.classList.add('d-none');
     const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
-    const date = v => v ? new Date(v).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}) : "—";
+    const date = v => v ? formatDateTime(v) : "—";
 
     async function loadPGs() {
         try {
@@ -101,19 +103,62 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("timelineTitle").textContent=name;
         document.getElementById("timelineMeta").textContent=role==="guest"?"Guest":"Tenant";
         PAGE_LOADER.element(document.getElementById("timelineBody"), "Loading timeline...");
+        document.getElementById("timelineFooter").hidden=true;
         timelineModal.show();
         try{
             const r=await API.activityLogs.list(role==="tenant"?{tenant_id:id,limit:100}:{guest_id:id,limit:100});
-            const rows=r.data||[];
+            const rows=r.data||[]; tlRows=rows; tlSel.clear(); tlUser={id,role,name};
             document.getElementById("timelineBody").innerHTML=rows.length?rows.map(x=>`
               <div class="d-flex gap-3 pb-3 mb-3 border-bottom">
+                ${canDelete?`<div class="pt-2"><input type="checkbox" class="form-check-input tl-chk" data-id="${x.id}" aria-label="Select entry"></div>`:''}
                 <div class="rounded-circle bg-light d-flex align-items-center justify-content-center" style="width:38px;height:38px;flex:0 0 38px"><i class="bi bi-activity"></i></div>
                 <div class="flex-grow-1"><div class="fw-semibold">${esc(x.action.replaceAll("_"," "))}</div><div class="small text-muted-soft">${esc(x.module)} · ${date(x.created_at)}</div>
                 <div class="small mt-1">Done by <strong>${esc(x.actor_name||"System")}, ${esc(x.actor_position||"System")}</strong></div>
                 ${x.metadata&&Object.keys(x.metadata).length?`<div class="small text-muted-soft mt-1">${esc(JSON.stringify(x.metadata))}</div>`:""}</div>
               </div>`).join(""):'<div class="text-center py-4 text-muted-soft">No activity recorded yet.</div>';
+            syncTl();
         }catch(e){document.getElementById("timelineBody").innerHTML=`<div class="text-danger">${esc(e.message)}</div>`;}
     };
+
+
+    // ---- deleting app activity ----
+    function syncTl(){
+        const f=document.getElementById("timelineFooter");
+        f.hidden=!canDelete||!tlRows.length;
+        document.getElementById("tlDelSel").hidden=!tlSel.size;
+        document.getElementById("timelineSel").textContent=tlSel.size?`${tlSel.size} selected`:`${tlRows.length} entr${tlRows.length===1?'y':'ies'} shown`;
+    }
+    document.getElementById("timelineBody").addEventListener("change",e=>{const c=e.target.closest(".tl-chk"); if(!c) return; c.checked?tlSel.add(c.dataset.id):tlSel.delete(c.dataset.id); syncTl();});
+    async function delActivity(payload,title,body,typed){
+        const ok=await LKUI.confirm({title,body,confirmText:"Delete permanently",requireText:typed?"DELETE":undefined});
+        if(!ok) return false;
+        try{ const r=await API.activityLogs.remove({scope:"app",...payload}); if(!r.success) throw new Error(r.message); LKUI.toast(r.message||"Deleted","success"); return true; }
+        catch(e){ LKUI.toast(e.message||"Could not delete","danger"); return false; }
+    }
+    document.getElementById("tlDelSel").addEventListener("click",async()=>{
+        if(await delActivity({ids:[...tlSel].map(Number)},`Delete ${tlSel.size} activity entr${tlSel.size===1?'y':'ies'}?`,"They will be removed from this user's timeline for good.")){
+            openTimeline(tlUser.id,tlUser.name,tlUser.role); loadUsers(); loadStats();
+        }
+    });
+    document.getElementById("tlDelAll").addEventListener("click",async()=>{
+        const key=tlUser.role==="guest"?"guest_id":"tenant_id";
+        if(await delActivity({filters:{[key]:tlUser.id},confirm:true},`Clear all activity for ${tlUser.name}?`,"Every recorded activity entry for this user will be removed. This cannot be undone.",true)){
+            openTimeline(tlUser.id,tlUser.name,tlUser.role); loadUsers(); loadStats();
+        }
+    });
+    const clearBtn=document.getElementById("clearAppBtn");
+    if(clearBtn){
+        clearBtn.hidden=!canDelete;
+        clearBtn.addEventListener("click",async()=>{
+            const days=await LKUI.prompt({title:"Clear app activity",body:"Delete app activity (tenants and guests) older than how many days? Leave 0 to delete ALL app activity that matches the current filters.",label:"Older than (days)",type:"number",value:"90",icon:"bi-eraser",tone:"warn"});
+            if(days===null||days===undefined) return;
+            const n=Math.max(0,parseInt(days,10)||0);
+            const p=params();
+            const filters={pg_id:p.pg_id,module:p.module,action:p.action,from:p.from,to:p.to};
+            const label=n>0?`older than ${n} days`:"matching the current filters";
+            if(await delActivity({filters,older_than_days:n||undefined,confirm:true},"Delete app activity?",`All app activity ${label} will be removed permanently. Admin audit logs are not affected.`,true)){ loadUsers(); loadStats(); }
+        });
+    }
 
     window.openMessage=function(id,name){
         activeUser=id;

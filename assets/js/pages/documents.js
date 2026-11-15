@@ -130,15 +130,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const opts = [
             { key: "all", label: "All", icon: "bi-collection" },
             { key: "pending", label: "Needs review", icon: "bi-hourglass-split" },
-            { key: "approved", label: "Approved", icon: "bi-check-circle" },
-            { key: "rejected", label: "Rejected", icon: "bi-x-circle" }
+            { key: "approved", label: "Approved", icon: "bi-check-circle" }
         ];
         el.innerHTML = opts.map(o => `<button type="button" class="pg-pill ${currentReview === o.key ? "active" : ""}" data-review="${o.key}"><i class="bi ${o.icon}"></i> ${o.label} <b>${c[o.key]}</b>${o.key === "pending" && c.fresh ? ` <span class="chip chip-red" style="padding:0 .4rem">${c.fresh} new</span>` : ""}</button>`).join("");
         el.querySelectorAll("[data-review]").forEach(b => b.addEventListener("click", () => { currentReview = b.dataset.review; selectedDocs.clear(); updateBulkActions(); renderGrid(); }));
     }
 
     function getFilteredDocs() {
-        let docs = allDocs;
+        let docs = allDocs.filter(d => d.review_status !== "rejected");
         if (currentReview !== "all") docs = docs.filter(d => (d.review_status || "approved") === currentReview);
         if (currentFilter === "all") {
             // keep all types
@@ -294,10 +293,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                         <div class="small text-muted-soft mt-1" title="${lkEsc(LKUI.fmtDateTime(d.created_at))}"><i class="bi bi-cloud-upload me-1"></i>Uploaded ${lkEsc(LKUI.timeAgo(d.created_at))}${d.uploaded_by_type === 'admin' ? ' by admin' : ''}</div>
                         ${d.review_status === 'rejected' && d.review_note ? `<div class="small text-danger mt-1"><i class="bi bi-chat-left-text me-1"></i>${lkEsc(d.review_note)}</div>` : ''}
-                        ${canReview && d.review_status !== 'approved' ? `<div class="d-flex gap-1 mt-2" onclick="event.stopPropagation()">
+                        ${canReview && d.review_status === 'pending' ? `<div class="d-flex gap-1 mt-2" onclick="event.stopPropagation()">
                             <button class="btn btn-brand btn-sm flex-grow-1" onclick="reviewDoc('${d.id}','approve')"><i class="bi bi-check2"></i> Approve</button>
-                            ${d.review_status === 'pending' ? `<button class="btn btn-soft-danger btn-sm flex-grow-1" onclick="reviewDoc('${d.id}','reject')"><i class="bi bi-x-lg"></i> Reject</button>` : ''}</div>` : ''}
-                        ${canReview && d.review_status === 'approved' ? `<button class="btn btn-sm btn-ghost mt-2 w-100" onclick="event.stopPropagation(); reviewDoc('${d.id}','reject')"><i class="bi bi-arrow-counterclockwise"></i> Reject / ask for re-upload</button>` : ''}
+                            <button class="btn btn-soft-danger btn-sm flex-grow-1" onclick="reviewDoc('${d.id}','reject')"><i class="bi bi-x-lg"></i> Reject</button></div>` : ''}
                     </div>
                 </div>
             </div>`;
@@ -565,7 +563,7 @@ document.addEventListener("DOMContentLoaded", () => {
         panel.innerHTML = `<div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div><span class="chip ${st.cls}"><i class="bi ${st.icon}"></i> ${st.label}</span>
               <span class="small text-muted-soft ms-2">Uploaded ${lkEsc(LKUI.timeAgo(doc.created_at))}${doc.reviewed_at ? ` · reviewed ${lkEsc(LKUI.timeAgo(doc.reviewed_at))}${doc.reviewed_by_name ? ' by ' + lkEsc(doc.reviewed_by_name) : ''}` : ''}</span></div>
-            ${canReview ? `<div class="d-flex gap-2">${doc.review_status !== 'approved' ? `<button class="btn btn-brand btn-sm" id="pvApprove"><i class="bi bi-check2"></i> Approve</button>` : ''}<button class="btn btn-soft-danger btn-sm" id="pvReject"><i class="bi bi-x-lg"></i> Reject</button></div>` : ''}</div>
+            ${canReview && doc.review_status === 'pending' ? `<div class="d-flex gap-2"><button class="btn btn-brand btn-sm" id="pvApprove"><i class="bi bi-check2"></i> Approve</button><button class="btn btn-soft-danger btn-sm" id="pvReject"><i class="bi bi-x-lg"></i> Reject</button></div>` : ''}</div>
             ${doc.review_note ? `<div class="small mt-2"><b>Note to tenant:</b> ${lkEsc(doc.review_note)}</div>` : ''}`;
         if (body) body.appendChild(panel);
         const a = panel.querySelector("#pvApprove"), r = panel.querySelector("#pvReject");
@@ -586,6 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (action === "reject") { note = await askReason(1); if (!note) return false; }
         try {
             const res = await API.documents.admin.review(id, action, note);
+            if (res.data && res.data.removed) { allDocs = allDocs.filter(x => String(x.id) !== String(id)); delete docsById[id]; selectedDocs.delete(Number(id)); selectedDocs.delete(String(id)); }
             const d = docsById[id];
             if (d) { d.review_status = res.data.review_status; d.review_note = res.data.review_note; d.reviewed_at = new Date().toISOString(); d.admin_seen_at = d.admin_seen_at || d.reviewed_at; }
             showToast(res.message, "success");

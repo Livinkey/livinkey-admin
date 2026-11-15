@@ -6,7 +6,7 @@
     const canEdit = () => Permissions.hasPermission('pgs', 'edit');
     const $ = (id) => document.getElementById(id);
     const mk = (id, html) => { let el = $(id); if (el) el.remove(); el = document.createElement('div'); el.className = 'modal fade'; el.id = id; el.tabIndex = -1; el.innerHTML = html; document.body.appendChild(el); return new bootstrap.Modal(el); };
-    const fmtD = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    const fmtD = (d) => d ? formatDate(d) : '';
     const inr = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
     const pgName = (id) => { const c = document.querySelector(`[onclick*="viewPgDetail('${id}')"] .fw-bold`); return c ? c.textContent : 'PG'; };
 

@@ -38,15 +38,29 @@
             <div class="col-lg-2 col-6"><label class="filter-label">To</label><input type="date" id="aTo" class="form-control"></div>
             <div class="col-lg-1 col-12"><button class="btn btn-outline-brand w-100" id="aReset" type="button">Reset</button></div>
           </div>
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2" id="actionsDelBar" hidden>
+            <span class="small text-muted-soft" id="actionsSel"></span>
+            <div class="d-flex gap-2">
+              <button class="btn btn-soft-danger btn-sm" id="actionsDelSel" type="button" hidden><i class="bi bi-trash3"></i> Delete selected</button>
+              <button class="btn btn-soft-danger btn-sm" id="actionsDelAll" type="button"><i class="bi bi-eraser"></i> Clear shown entries…</button>
+            </div>
+          </div>
           <div class="table-responsive"><table class="data-table" id="actionsTable">
-            <thead><tr><th>When</th><th>Admin</th><th>Action</th><th>Module</th><th>Record</th><th>IP address</th></tr></thead>
+            <thead><tr><th class="no-sort" style="width:34px"><input type="checkbox" class="form-check-input" id="actionsChkAll" aria-label="Select all"></th><th>When</th><th>Admin</th><th>Action</th><th>Module</th><th>Record</th><th>IP address</th></tr></thead>
             <tbody id="actionsBody"></tbody></table></div>
           <div class="text-center mt-3"><button class="btn btn-outline-brand btn-sm" id="loadMore" hidden>Load older entries</button></div>
         </div>
 
         <div id="paneLogins" hidden>
+          <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+            <span class="small text-muted-soft" id="loginsSel"></span>
+            <div class="d-flex gap-2">
+              <button class="btn btn-soft-danger btn-sm" id="loginsDelSel" type="button" hidden><i class="bi bi-trash3"></i> Delete selected</button>
+              <button class="btn btn-soft-danger btn-sm" id="loginsDelAll" type="button"><i class="bi bi-eraser"></i> Clear sign-in history…</button>
+            </div>
+          </div>
           <div class="table-responsive"><table class="data-table" id="loginsTable">
-            <thead><tr><th>When</th><th>Admin</th><th>Role</th><th>Device</th><th>IP address</th></tr></thead>
+            <thead><tr><th class="no-sort" style="width:34px"><input type="checkbox" class="form-check-input" id="loginsChkAll" aria-label="Select all"></th><th>When</th><th>Admin</th><th>Role</th><th>Device</th><th>IP address</th></tr></thead>
             <tbody id="loginsBody"></tbody></table></div>
         </div>
       </div>

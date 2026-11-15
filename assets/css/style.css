@@ -1506,3 +1506,12 @@ a.btn.is-loading { pointer-events: none; }
   html:not([data-theme="dark"]) body.sidebar-collapsed .sidebar .side-brand .logo-light,
   html[data-theme="dark"] body.sidebar-collapsed .sidebar .side-brand .logo-dark{display:block!important;}
 }
+
+/* Tenant management: stacked (vertical) row actions */
+.tenant-actions{display:flex; flex-direction:column; align-items:flex-end; gap:6px;}
+.tenant-actions .btn-icon{width:32px; height:32px;}
+
+/* Meter readings: grouped header + comfortable numeric columns */
+.meter-table thead th.mr-group{border-bottom:1px solid var(--border); background:var(--lk-green-50); color:var(--lk-green-darker);}
+.meter-table td, .meter-table th{white-space:nowrap; vertical-align:middle;}
+.meter-table td:nth-child(3){white-space:normal; min-width:150px;}

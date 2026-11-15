@@ -632,6 +632,8 @@ const API = {
             return apiRequest(`/activity-logs?${qs.toString()}`, 'GET');
         },
         stats: () => apiRequest('/activity-logs/stats', 'GET'),
+        // payload: { scope:'app'|'admin'|'logins', ids?:[], filters?:{}, older_than_days?, confirm?:true }
+        remove: (payload) => apiRequest('/activity-logs/delete', 'POST', payload),
         sendMessage: (id, title, message, subject = '') =>
             apiRequest(`/activity-logs/${id}/message`, 'POST', { title, message, subject }),
         export: (params = {}) => {
@@ -1171,17 +1173,44 @@ function fmtINR(n) {
     return '₹' + Number(n).toLocaleString('en-IN');
 }
 
+// Dates are shown everywhere as dd/mm/yyyy (date-times add 12h time).
+function _lkParse(date) {
+    if (!date) return null;
+    if (date instanceof Date) return isNaN(date.getTime()) ? null : date;
+    const str = String(date).trim();
+    // Plain DATE values: build in local time so there is no timezone day-shift.
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    // "YYYY-MM-DDT00:00:00.000Z" coming from a MySQL DATE column
+    m = /^(\d{4})-(\d{2})-(\d{2})T00:00:00(?:\.000)?Z$/.exec(str);
+    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    const d = new Date(str.includes(' ') && !str.includes('T') ? str.replace(' ', 'T') : str);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 function formatDate(date) {
-    if (!date) return '—';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    const d = _lkParse(date);
+    if (!d) return date ? String(date) : '—';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return `${dd}/${mm}/${d.getFullYear()}`;
 }
 
 function formatDateTime(date) {
-    if (!date) return '—';
-    const d = new Date(date);
-    return d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const d = _lkParse(date);
+    if (!d) return date ? String(date) : '—';
+    let h = d.getHours();
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${formatDate(d)}, ${String(h).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} ${ap}`;
 }
+
+window.lkParseDate = _lkParse;
+// Local YYYY-MM-DD (toISOString() shifts the day for timezones ahead of UTC, e.g. IST)
+window.lkLocalISO = function (d) {
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+};
 
 // ============ TOAST UTILITY ============
 function showToast(message, type = 'success') {

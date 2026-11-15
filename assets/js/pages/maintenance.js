@@ -286,7 +286,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (id !== fwdRequestId) return;
             const rows = h.data || [];
             if (rows.length) {
-                list.innerHTML = rows.map((f) => `<div><span>${escF(f.to_name || f.to_phone)}${f.to_name ? ` · ${escF(f.to_phone)}` : ""}<br><small class="text-muted">${escF(new Date(f.created_at).toLocaleString())}${f.admin_name ? " · " + escF(f.admin_name) : ""}</small></span><span class="fw-st ${statusClass(f.status)}" ${f.error_message ? `title="${escF(f.error_message)}"` : ""}>${escF(statusWord(f))}</span></div>`).join("");
+                list.innerHTML = rows.map((f) => `<div><span>${escF(f.to_name || f.to_phone)}${f.to_name ? ` · ${escF(f.to_phone)}` : ""}<br><small class="text-muted">${escF(formatDateTime(f.created_at))}${f.admin_name ? " · " + escF(f.admin_name) : ""}</small></span><span class="fw-st ${statusClass(f.status)}" ${f.error_message ? `title="${escF(f.error_message)}"` : ""}>${escF(statusWord(f))}</span></div>`).join("");
                 hist.classList.remove("d-none");
             }
             const recent = (r.data || []).slice(0, 5);
@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("fwForm").reset();
         document.getElementById("fwError").classList.add("d-none");
         document.getElementById("fwTitle").innerHTML = `<i class="bi bi-whatsapp me-2" style="color:#25D366"></i>Forward request #${numericId}`;
-        document.getElementById("fwSummary").innerHTML = `<b>${escF(m.issue_type || "Maintenance")}</b> · Room ${escF(m.room_number || "—")}${m.pg_name ? " · " + escF(m.pg_name) : ""}<br>${escF(m.tenant_name || "Tenant")}${m.service_date ? " · " + escF(new Date(m.service_date).toLocaleDateString()) : ""}<br><span class="text-muted">${escF((m.description || "No description").slice(0, 140))}</span>`;
+        document.getElementById("fwSummary").innerHTML = `<b>${escF(m.issue_type || "Maintenance")}</b> · Room ${escF(m.room_number || "—")}${m.pg_name ? " · " + escF(m.pg_name) : ""}<br>${escF(m.tenant_name || "Tenant")}${m.service_date ? " · " + escF(formatDate(m.service_date)) : ""}<br><span class="text-muted">${escF((m.description || "No description").slice(0, 140))}</span>`;
         const pending = m.status === "pending";
         document.getElementById("fwStartWrap").classList.toggle("d-none", !pending);
         document.getElementById("fwStart").checked = pending;

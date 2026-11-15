@@ -538,7 +538,7 @@ document.addEventListener("DOMContentLoaded", () => {
         el.addEventListener('change', () => el.classList.remove('lk-autofilled'), { once: true });
     }
     function displayValue(key, v) {
-        if (key === 'arrival_date') { const d = new Date(v + 'T00:00:00'); return isNaN(d) ? v : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
+        if (key === 'arrival_date') return formatDate(v);
         if (key === 'period_of_stay') return v + (v === '1' ? ' month' : ' months');
         if (key === 'gender') return v.charAt(0).toUpperCase() + v.slice(1);
         if (key === 'residency') return v === 'international' ? 'International' : 'National';
@@ -1041,7 +1041,7 @@ document.addEventListener("DOMContentLoaded", () => {
             let lastAct = '—';
             if (t._last_app_activity) {
                 try {
-                    lastAct = new Date(t._last_app_activity).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+                    lastAct = formatDateTime(t._last_app_activity);
                 } catch (_) {
                     lastAct = String(t._last_app_activity);
                 }
@@ -1052,7 +1052,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <tr data-id="${X(t.id)}">
                 <td>
                     <span class="name-link" onclick="openDocs('${X(t.id)}')">${X(t.full_name) || '—'}</span>${Number(t.is_blocked) === 1 ? ` <span class="chip chip-red" title="${X(t.block_reason || '')}"><i class="bi bi-slash-circle"></i> Blocked</span>` : ''}
-                    <div class="small text-muted-soft">${X(t.email) || '—'}</div><div class="small text-muted-soft">Parent: ${X(t.parent_phone) || '—'}</div>
+                    <div class="small text-muted-soft">${X(t.email) || '—'}</div><div class="small text-muted-soft"><i class="bi bi-telephone me-1"></i>${X(((t.country_code || '') + ' ' + (t.phone || '')).trim()) || '—'}</div>
                 </td>
                 <td>${X(t.pg_name) || '—'}</td>
                 <td>${X(t.room_number) || '—'}</td>
@@ -1068,17 +1068,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td><span class="chip ${statusChip}">${statusLabel}</span></td>
                 <td>${appChip}</td>
                 <td>${LKUI.seen(t._last_app_activity, { never: 'Never opened' })}</td>
-                <td class="text-end text-nowrap">
-                    ${canViewTenants ? `<button class="btn-icon me-1" title="View complete details" onclick="viewTenant('${X(t.id)}')"><i class="bi bi-eye"></i></button>` : ''}
-                    <a class="btn-icon me-1" title="View bills" href="bills.html?q=${encodeURIComponent(t.full_name || '')}"><i class="bi bi-receipt"></i></a>
-                    ${t.agreement_status === 'accepted' ? `<button class="btn-icon me-1" title="Download current accepted agreement PDF" onclick="downloadTenantAgreement('${t.id}')"><i class="bi bi-file-earmark-pdf"></i></button>` : ''}
-                    ${canEditTenants ? `<button class="btn-icon me-1" title="Edit" onclick="editTenant('${t.id}')"><i class="bi bi-pencil"></i></button>` : ''}
+                <td class="text-end"><div class="tenant-actions">
+                    ${canViewTenants ? `<button class="btn-icon" title="View complete details" onclick="viewTenant('${X(t.id)}')"><i class="bi bi-eye"></i></button>` : ''}
+                    <a class="btn-icon" title="View bills" href="bills.html?q=${encodeURIComponent(t.full_name || '')}"><i class="bi bi-receipt"></i></a>
+                    ${t.agreement_status === 'accepted' ? `<button class="btn-icon" title="Download current accepted agreement PDF" onclick="downloadTenantAgreement('${t.id}')"><i class="bi bi-file-earmark-pdf"></i></button>` : ''}
+                    ${canEditTenants ? `<button class="btn-icon" title="Edit" onclick="editTenant('${t.id}')"><i class="bi bi-pencil"></i></button>` : ''}
                     ${canEditTenants ? (Number(t.is_blocked) === 1
-                        ? `<button class="btn-icon me-1" title="Unblock tenant" onclick="unblockTenant('${t.id}')"><i class="bi bi-unlock"></i></button>`
-                        : `<button class="btn-icon me-1" title="Block tenant" onclick="blockTenant('${t.id}')"><i class="bi bi-slash-circle"></i></button>`) : ''}
-                    ${canDeleteTenants ? `<button class="btn-icon me-1" title="Check Out" onclick="checkoutTenant('${t.id}')"><i class="bi bi-box-arrow-right"></i></button>
+                        ? `<button class="btn-icon" title="Unblock tenant" onclick="unblockTenant('${t.id}')"><i class="bi bi-unlock"></i></button>`
+                        : `<button class="btn-icon" title="Block tenant" onclick="blockTenant('${t.id}')"><i class="bi bi-slash-circle"></i></button>`) : ''}
+                    ${canDeleteTenants ? `<button class="btn-icon" title="Check Out" onclick="checkoutTenant('${t.id}')"><i class="bi bi-box-arrow-right"></i></button>
                     <button class="btn-icon" title="Archive" onclick="archiveTenant('${t.id}')"><i class="bi bi-archive"></i></button>` : ''}
-                </td>
+                </div></td>
             </tr>`;
         }).join("");
     }
@@ -2096,7 +2096,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const extra = isCheckout
             ? `<div class="mt-3 text-start">
                  <label class="form-label">Checkout date <span class="text-danger">*</span></label>
-                 <input type="date" class="form-control" id="checkoutDateInput" value="${new Date().toISOString().slice(0,10)}">
+                 <input type="date" class="form-control" id="checkoutDateInput" value="${lkLocalISO(new Date())}">
                  <label class="form-label mt-2">Note (optional)</label>
                  <textarea class="form-control" id="archiveReasonInput" rows="2" placeholder="Optional note"></textarea>
                  <p class="small text-muted mt-2 mb-0">Tenant will move to <strong>Archive</strong>. History and documents are kept. You can restore later.</p>
@@ -2499,8 +2499,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let blockingTenantId = null;
 
     const vx = (v) => (v === null || v === undefined || String(v).trim() === '') ? '—' : LKUI.esc(v);
-    const vdate = (d) => { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? LKUI.esc(d) : x.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); };
-    const vdt = (d) => { if (!d) return '—'; const x = new Date(d); return isNaN(x) ? LKUI.esc(d) : x.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }); };
+    const vdate = (d) => d ? LKUI.esc(formatDate(d)) : '—';
+    const vdt = (d) => d ? LKUI.esc(formatDateTime(d)) : '—';
     const vrow = (label, value) => `<div class="col-6 col-lg-4"><div class="small text-muted-soft">${label}</div><div class="fw-semibold" style="word-break:break-word">${value}</div></div>`;
     const vsec = (title, icon, inner) => `<div class="section-card mb-3"><div class="card-head"><div><h6 class="mb-0"><i class="bi ${icon} me-2"></i>${title}</h6></div></div><div class="row g-3">${inner}</div></div>`;
 

@@ -577,12 +577,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (!document.getElementById("proofPaidFrom").value) {
                         const today = new Date();
                         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-                        document.getElementById("proofPaidFrom").value = firstDay.toISOString().split('T')[0];
+                        document.getElementById("proofPaidFrom").value = lkLocalISO(firstDay);
                     }
                     if (!document.getElementById("proofPaidTill").value) {
                         const today = new Date();
                         const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-                        document.getElementById("proofPaidTill").value = lastDay.toISOString().split('T')[0];
+                        document.getElementById("proofPaidTill").value = lkLocalISO(lastDay);
                     }
                 } else {
                     dateFieldsContainer.style.display = 'none';
@@ -790,8 +790,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const today = new Date();
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
         const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        document.getElementById("cashPaidFrom").value = firstDay.toISOString().split('T')[0];
-        document.getElementById("cashPaidTill").value = lastDay.toISOString().split('T')[0];
+        document.getElementById("cashPaidFrom").value = lkLocalISO(firstDay);
+        document.getElementById("cashPaidTill").value = lkLocalISO(lastDay);
 
         const otpBtn = document.getElementById("requestCashOtpBtn");
         const verifyBtn = document.getElementById("verifyCashBtn");
@@ -1522,9 +1522,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         // Rent always comes from each TENANT's own recorded rent (not the PG/room list price).
-        const recordedTotal = tenants.reduce((sum, t) => sum + Number(t.rent || 0), 0);
-        const roomRent = recordedTotal;
-        rentEl.value = (tenants.length === 1 ? Number(tenants[0].rent || 0) : recordedTotal).toFixed(2);
+        // Roommates share ONE room: a Full (group) bill charges the room's rent once (highest recorded
+        // rent if they differ) - never the sum. A Split bill still bills each tenant their own rent.
+        const rents = tenants.map(t => Number(t.rent || 0));
+        const sumRents = rents.reduce((a, b) => a + b, 0);
+        const groupRent = Math.max(...rents);
+        const roomRent = (tenants.length > 1 && mode === 'full') ? groupRent : sumRents;
+        rentEl.value = roomRent.toFixed(2);
         rentEl.readOnly = true;
         rentEl.title = "Rent is taken from the tenant's recorded rent";
 
@@ -1537,7 +1541,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (notice && tenants.length > 1) {
             notice.classList.remove("d-none");
             if (mode === "full") {
-                notice.textContent = `Full room bill: ${fmtINR(roomTotal)} (sum of each tenant's own rent ${fmtINR(roomRent)} + charges). Any one tenant's verified payment settles the shared bill for all ${tenants.length} tenants.`;
+                notice.textContent = `Full room bill: ${fmtINR(roomTotal)} (room rent ${fmtINR(roomRent)} charged once, not per tenant, + charges). Any one tenant's verified payment settles the shared bill for all ${tenants.length} tenants.`;
             } else {
                 const lines = tenants.map(t => `${t.full_name}: rent ${fmtINR(Number(t.rent || 0))} + share ${fmtINR(sharedExtras)} = ${fmtINR(Number(t.rent || 0) + sharedExtras)}`);
                 notice.textContent = `Split room bill. Each tenant pays their own rent; electricity, maintenance and other charges are split equally. ${lines.join(' | ')}`;

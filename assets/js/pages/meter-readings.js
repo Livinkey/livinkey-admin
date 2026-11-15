@@ -13,17 +13,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let pending = null; // {ids} | {filters}
 
     const num = (v) => v === null || v === undefined || v === '' ? '—' : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
-    const dt = (d) => d ? new Date(d).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+    const dt = (d) => d ? formatDateTime(d) : '—';
+    // "2026-03" -> "Mar 2026"
+    const monthLabel = (m) => { const x = /^(\d{4})-(\d{2})$/.exec(m || ''); return x ? new Date(Number(x[1]), Number(x[2]) - 1, 1).toLocaleString('en-GB', { month: 'short', year: 'numeric' }) : (m || '—'); };
+    // Stored `units` is the combined total; main meter units = total - inverter units.
+    const mainUnits = (r) => r.meter_mode === 'dual' ? Math.max(0, Number(r.units || 0) - Number(r.inverter_units || 0)) : r.units;
     const filters = () => ({ pg_id: $('fPg').value, month: $('fMonth').value, from: $('fFrom').value, to: $('fTo').value, q: $('fQ').value.trim() });
 
     async function load() {
-        $('tbody').innerHTML = '<tr><td colspan="13" class="text-center py-5 text-muted-soft">Loading…</td></tr>';
+        $('tbody').innerHTML = '<tr><td colspan="16" class="text-center py-5 text-muted-soft">Loading…</td></tr>';
         try {
             const r = await API.electricity.readings({ ...filters(), limit: PAGE, offset: page * PAGE });
             rows = r.data || []; total = r.total || 0;
             renderKpis(r); render();
         } catch (e) {
-            $('tbody').innerHTML = `<tr><td colspan="13" class="text-center py-5 text-danger">${E(e.message || 'Could not load readings')}</td></tr>`;
+            $('tbody').innerHTML = `<tr><td colspan="16" class="text-center py-5 text-danger">${E(e.message || 'Could not load readings')}</td></tr>`;
         }
     }
 
@@ -37,19 +41,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function render() {
         $('deleteFilteredBtn').hidden = !canDelete || total === 0;
         if (!rows.length) {
-            $('tbody').innerHTML = '<tr><td colspan="13" class="text-center py-5 text-muted-soft">No meter readings found for this selection.</td></tr>';
+            $('tbody').innerHTML = '<tr><td colspan="16" class="text-center py-5 text-muted-soft">No meter readings found for this selection.</td></tr>';
         } else {
             $('tbody').innerHTML = rows.map(r => {
                 const dual = r.meter_mode === 'dual';
+                const m = mainUnits(r);
                 return `<tr>
                   <td><input type="checkbox" class="form-check-input rowchk" data-id="${r.id}" ${selected.has(r.id) ? 'checked' : ''} ${canDelete ? '' : 'disabled'}></td>
-                  <td>${dt(r.recorded_at)}</td>
+                  <td class="text-nowrap">${dt(r.recorded_at)}</td>
                   <td><div class="fw-semibold">${E(r.tenant_name || '—')}</div>${r.bill_group_id ? '<div class="small text-muted-soft">Shared room bill</div>' : ''}</td>
-                  <td>${E(r.pg_name || '—')}</td><td>${E(r.room_number || '—')}</td><td>${E(r.billing_month || '—')}</td>
-                  <td class="text-end">${num(r.previous_reading)}</td><td class="text-end">${num(r.current_reading)}</td><td class="text-end fw-semibold">${num(r.units)}</td>
-                  <td class="text-end">${dual ? `${num(r.inverter_previous_reading)} → ${num(r.inverter_current_reading)} <span class="text-muted-soft">(${num(r.inverter_units)})</span>` : '—'}</td>
+                  <td>${E(r.pg_name || '—')}</td><td>${E(r.room_number || '—')}</td><td class="text-nowrap">${E(monthLabel(r.billing_month))}</td>
+                  <td class="text-end">${num(r.previous_reading)}</td><td class="text-end">${num(r.current_reading)}</td><td class="text-end">${num(m)}</td>
+                  <td class="text-end">${dual ? num(r.inverter_previous_reading) : '—'}</td><td class="text-end">${dual ? num(r.inverter_current_reading) : '—'}</td><td class="text-end">${dual ? num(r.inverter_units) : '—'}</td>
+                  <td class="text-end fw-semibold">${num(r.units)}</td>
                   <td class="text-end">${fmtINR(r.amount || 0)}</td>
-                  <td><span class="chip ${r.bill_status === 'paid' ? 'chip-green' : r.bill_status === 'partially_paid' ? 'chip-amber' : 'chip-red'}">${E(String(r.bill_status || '—').replace('_', ' '))}</span></td>
+                  <td><span class="chip ${r.bill_status === 'paid' ? 'chip-green' : r.bill_status === 'partially_paid' ? 'chip-amber' : 'chip-red'}">${E(String(r.bill_status || '—').replace(/_/g, ' '))}</span></td>
                   <td class="text-end">${canDelete ? `<button class="btn-icon" title="Delete this reading" data-del="${r.id}"><i class="bi bi-trash3"></i></button>` : ''}</td>
                 </tr>`;
             }).join('');
@@ -100,11 +106,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const list = r.data || [];
             if (!list.length) { LKUI.toast('Nothing to export for this selection', 'info'); return; }
             const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-            const head = ['Recorded at', 'Tenant', 'PG', 'Room', 'Bill month', 'Meter mode', 'Previous reading', 'Current reading', 'Units', 'Inverter previous', 'Inverter current', 'Inverter units', 'Electricity amount', 'Bill status'];
-            const csv = [head.join(',')].concat(list.map(x => [dt(x.recorded_at), x.tenant_name, x.pg_name, x.room_number, x.billing_month, x.meter_mode, x.previous_reading, x.current_reading, x.units, x.inverter_previous_reading, x.inverter_current_reading, x.inverter_units, x.amount, x.bill_status].map(q).join(','))).join('\n');
+            const head = ['Recorded at', 'Tenant', 'PG', 'Room', 'Bill month', 'Meter type',
+                'Main meter - previous reading', 'Main meter - current reading', 'Main meter - units',
+                'Inverter meter - previous reading', 'Inverter meter - current reading', 'Inverter meter - units',
+                'Total units', 'Electricity amount (INR)', 'Bill status', 'Shared room bill'];
+            const nv = (v) => (v === null || v === undefined || v === '') ? '' : Number(v);
+            const csv = [head.join(',')].concat(list.map(x => {
+                const dual = x.meter_mode === 'dual';
+                return [dt(x.recorded_at), x.tenant_name, x.pg_name, x.room_number, monthLabel(x.billing_month), dual ? 'Main + Inverter' : 'Single meter',
+                    nv(x.previous_reading), nv(x.current_reading), nv(mainUnits(x)),
+                    dual ? nv(x.inverter_previous_reading) : '', dual ? nv(x.inverter_current_reading) : '', dual ? nv(x.inverter_units) : '',
+                    nv(x.units), nv(x.amount), String(x.bill_status || '').replace(/_/g, ' '), x.bill_group_id ? 'Yes' : 'No'].map(q).join(',');
+            })).join('\r\n');
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
-            a.download = `livinkey-meter-readings-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href);
+            a.download = `livinkey-meter-readings-${lkLocalISO(new Date())}.csv`; a.click(); URL.revokeObjectURL(a.href);
             if (r.total > list.length) LKUI.toast(`Exported the latest ${list.length} of ${r.total} readings. Narrow the filters to export the rest.`, 'info');
         } catch (e) { LKUI.toast(e.message || 'Export failed', 'danger'); }
         this.disabled = false;

@@ -412,11 +412,7 @@ Enjoy your stay!
 
     function formatGuestDate(d) {
         if (!d) return '—';
-        try {
-            const x = new Date(d);
-            if (isNaN(x.getTime())) return String(d);
-            return x.toLocaleString();
-        } catch { return String(d); }
+        return formatDateTime(d);
     }
 
     function escapeHtml(s) {
