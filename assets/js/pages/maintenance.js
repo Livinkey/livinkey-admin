@@ -342,6 +342,20 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (error) {
             err.textContent = error?.message || "Could not send the details. Please try again.";
             err.classList.remove("d-none");
+            // Guaranteed fallback: let the admin send the same details from their own WhatsApp.
+            try {
+                const req = maintenanceData.find(x => Number(x.id) === Number(fwdRequestId));
+                const code = raw.startsWith("+") ? "" : String(document.getElementById("fwCode").value || "").replace(/\D/g, "");
+                const waNum = raw.startsWith("+") ? digits : code + digits.replace(/^0+/, "");
+                if (req && waNum.length >= 8) {
+                    const a = document.createElement("a");
+                    a.href = "https://wa.me/" + waNum + "?text=" + encodeURIComponent(buildWhatsAppMessage(req) + "\n\n(Sent from system · Livinkey admin panel)");
+                    a.target = "_blank"; a.rel = "noopener";
+                    a.className = "d-block mt-2 fw-semibold";
+                    a.innerHTML = '<i class="bi bi-whatsapp me-1"></i>Open in WhatsApp and send it yourself';
+                    err.appendChild(a);
+                }
+            } catch (_) { /* optional helper */ }
             loadForwardExtras(fwdRequestId);
         } finally {
             fwdBusy = false; btn.disabled = false; btn.innerHTML = '<i class="bi bi-send-fill me-1"></i>Send details';
@@ -387,8 +401,9 @@ document.addEventListener("DOMContentLoaded", () => {
             `📸 *Image:* ${m.image_url || 'No image attached'}`,
             "",
             "---",
-            "⚠️ *This request has been forwarded from the Livinkey Admin Panel.*",
-            "Please take appropriate action."
+            "Please take appropriate action.",
+            "",
+            "_(Sent from system · Livinkey admin panel)_"
         ];
 
         return lines.join('\n');

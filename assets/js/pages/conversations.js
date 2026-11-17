@@ -197,8 +197,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const isImg = /^image\//i.test(meta.mediaType || "");
       inner += isImg ? `<img class="cv-img" data-media="${m.id}" alt="Attachment" loading="lazy">` : `<span class="cv-file" data-file="${m.id}"><i class="bi bi-paperclip"></i>Attachment${meta.mediaType ? ` (${esc(meta.mediaType.split("/")[1] || "file")})` : ""}</span>`;
     }
-    if (m.message_type === "otp") inner += '<div class="cv-otp"><i class="bi bi-shield-lock-fill"></i>Verification code sent (hidden for security)</div>';
-    else if (m.content) inner += `<div class="cv-text">${fmt(m.content)}</div>`;
+    // Time-limited messages (OTP, payment QR ...) are relabelled "Expired" once their time has passed.
+    const expAt = meta.expires_at ? new Date(meta.expires_at) : null;
+    const expired = !!(expAt && !isNaN(expAt.getTime()) && expAt.getTime() < Date.now());
+    const expTag = expired ? '<span class="cv-exp"><i class="bi bi-hourglass-bottom"></i>Expired</span>' : "";
+    if (m.message_type === "otp") inner += `<div class="cv-otp ${expired ? "is-expired" : ""}"><i class="bi bi-shield-lock-fill"></i>${expired ? "Verification code" : "Verification code sent (hidden for security)"}${expTag}</div>`;
+    else if (m.content) {
+      // the hard-coded "(Sent from system ...)" footer is shown small and faded, like a system note
+      const sys = /\n*_?\((Sent from system[^)]*)\)_?\s*$/.exec(m.content);
+      const body = sys ? m.content.slice(0, sys.index) : m.content;
+      inner += `<div class="cv-text ${expired ? "is-expired" : ""}">${fmt(body)}</div>${expTag ? `<div>${expTag}</div>` : ""}${sys ? `<div class="cv-sys">(${esc(sys[1])})</div>` : ""}`;
+    }
     const ch = out ? `<i class="bi ${CH_ICON[m.channel] || "bi-chat"}" title="${CH_NAME[m.channel] || ""}"></i>` : "";
     const fell = out && meta.fallbackUsed && m.status !== "failed" ? ` title="WhatsApp was not available, so this went by ${CH_NAME[m.channel]}"` : "";
     inner += `<div class="cv-meta"${fell}>${ch}<span>${t ? hhmm(t) : ""}</span>${out ? tick(m) : ""}</div>`;
@@ -208,6 +217,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     return `<div class="cv-b ${out ? "out" : "in"} ${first ? "first" : ""} ${out && m.status === "failed" ? "fail" : ""}" data-mid="${m.id}" aria-label="${out ? "Sent" : "Received"} ${esc(statusText(m))}">${inner}</div>`;
   }
+
+  setInterval(() => {
+    if (state.msgs && state.msgs.some((x) => x.metadata && x.metadata.expires_at)) renderMessages(false, false);
+  }, 30000);
 
   function renderMessages(forceScroll, grew) {
     const stick = forceScroll || nearBottom();
