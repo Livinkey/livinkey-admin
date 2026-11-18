@@ -1515,3 +1515,22 @@ a.btn.is-loading { pointer-events: none; }
 .meter-table thead th.mr-group{border-bottom:1px solid var(--border); background:var(--lk-green-50); color:var(--lk-green-darker);}
 .meter-table td, .meter-table th{white-space:nowrap; vertical-align:middle;}
 .meter-table td:nth-child(3){white-space:normal; min-width:150px;}
+
+
+/* ---- Shared search box (LKSearch) ---- */
+.lk-has-clear { padding-right: 2.1rem !important; }
+.lk-search-clear {
+  position: absolute; right: .55rem; top: 50%; transform: translateY(-50%);
+  width: 1.5rem; height: 1.5rem; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted, #8a8f98); font-size: 1.2rem; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.lk-search-clear:hover { background: rgba(127,127,127,.18); color: inherit; }
+.lk-search-clear[hidden] { display: none !important; }
+.lk-result-count { font-size: .8rem; color: var(--text-muted, #8a8f98); }
+.lk-filter-bar .btn-link { font-size: .8rem; text-decoration: none; }
+.filter-pill .lk-pill-count {
+  display: inline-block; margin-left: .4rem; min-width: 1.3rem; padding: 0 .35rem; border-radius: 999px;
+  background: rgba(127,127,127,.2); font-size: .72rem; line-height: 1.3rem; text-align: center;
+}
+.filter-pill.active .lk-pill-count { background: rgba(255,255,255,.28); }

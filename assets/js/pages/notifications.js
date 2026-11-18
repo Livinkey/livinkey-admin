@@ -221,11 +221,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         if (searchTerm) {
-            filtered = filtered.filter(t => 
-                t.full_name?.toLowerCase().includes(searchTerm) ||
-                t.room_number?.toLowerCase().includes(searchTerm) ||
-                t.pg_name?.toLowerCase().includes(searchTerm)
-            );
+            const prep = LKSearch.prepare(searchTerm);
+            filtered = filtered.filter(t => LKSearch.matches(prep, [t.full_name, t.room_number, t.pg_name, t.phone, t.email]));
         }
         
         tenantSearchResults = filtered;

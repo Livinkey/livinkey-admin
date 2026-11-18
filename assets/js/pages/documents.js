@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const isNew = (d) => d.review_status === "pending" && !d.admin_seen_at;
     let selectedDocs = new Set();
     let allDocs = [];
+    let docSearchPrep = null;
     let pgList = [];
     let statusStats = { active: 0, inactive: 0, archived: 0, checked_out: 0, all: 0 };
     
@@ -163,6 +164,10 @@ document.addEventListener("DOMContentLoaded", () => {
             docs = docs.filter(d => d.has_vehicle == 1 || d.has_vehicle === true || VEHICLE_DOC_KEYS.includes(d.document_type));
         } else if (currentVehicleFilter === "non_vehicle") {
             docs = docs.filter(d => !VEHICLE_DOC_KEYS.includes(d.document_type));
+        }
+        if (docSearchPrep) {
+            docs = docs.filter(d => LKSearch.matches(docSearchPrep, [d.tenant_name, d.tenant_email, d.tenant_phone,
+                d.room_number, d.pg_name, String(d.document_type || '').replace(/_/g, ' '), d.review_status]));
         }
         return docs;
     }
@@ -704,22 +709,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // ============================================
     // SEARCH
     // ============================================
-    document.getElementById("docSearch")?.addEventListener("input", function() {
-        const term = this.value.trim().toLowerCase();
-        if (!term) {
-            loadDocuments();
-            return;
-        }
-        const filtered = allDocs.filter(d =>
-            (d.tenant_name || '').toLowerCase().includes(term) ||
-            (d.room_number || '').toLowerCase().includes(term) ||
-            (d.pg_name || '').toLowerCase().includes(term) ||
-            (d.document_type || '').toLowerCase().includes(term)
-        );
-        const temp = allDocs;
-        allDocs = filtered;
+    LKSearch.bind(document.getElementById("docSearch"), (_raw, prep) => {
+        docSearchPrep = prep;
+        selectedDocs.clear();
+        try { updateBulkActions(); } catch (_) {}
         renderGrid();
-        allDocs = temp;
     });
 
     // ============================================

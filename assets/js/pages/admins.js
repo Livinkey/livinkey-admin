@@ -43,15 +43,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderTable(search = "") {
-        const f = search.trim().toLowerCase();
-        let filtered = adminData;
-        if (f) {
-            filtered = adminData.filter(a =>
-                a.name?.toLowerCase().includes(f) ||
-                a.email?.toLowerCase().includes(f) ||
-                a.phone?.includes(f)
-            );
-        }
+        const prep = LKSearch.prepare(search);
+        const filtered = !prep ? adminData : adminData.filter(a =>
+            LKSearch.matches(prep, [a.name, a.email, a.phone, a.role, a.is_active === false ? 'disabled' : 'active']));
 
         const tbody = document.getElementById("adminsTbody");
         if (!tbody) return;
@@ -88,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join("");
     }
 
-    document.getElementById("adminSearch")?.addEventListener("input", (e) => renderTable(e.target.value));
+    LKSearch.bind(document.getElementById("adminSearch"), (value) => renderTable(value));
 
     // ============================================
     // AADHAR CAMERA CAPTURE (Desktop + Mobile)

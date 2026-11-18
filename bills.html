@@ -271,20 +271,34 @@
       <!-- ============================================ -->
       <div id="billsTabContent">
         <!-- Search and Filters -->
-        <div class="row g-3 mb-3 align-items-center">
-          <div class="col-md-6 col-lg-7">
-              <input type="text" class="form-control" id="billSearch" placeholder="Search by tenant, PG, room..." style="border-radius:var(--radius-md);">
+        <div class="row g-2 mb-3 align-items-center lk-filter-bar">
+          <div class="col-12 col-lg-4">
+              <input type="text" class="form-control" id="billSearch" placeholder="Search tenant, phone, email, PG, room, month, amount..." aria-label="Search bills" style="border-radius:var(--radius-md);">
           </div>
-          <div class="col-md-3 col-lg-3">
-              <select class="form-select" id="billPgFilter" style="border-radius:var(--radius-md);">
+          <div class="col-6 col-lg-2">
+              <select class="form-select" id="billPgFilter" aria-label="Filter by PG" style="border-radius:var(--radius-md);">
                 <option value="all">All PGs</option>
               </select>
           </div>
-          <div class="col-md-3 col-lg-2 d-flex justify-content-md-end">
+          <div class="col-6 col-lg-2">
+              <select class="form-select" id="billRoomFilter" aria-label="Filter by room" style="border-radius:var(--radius-md);">
+                <option value="all">All Rooms</option>
+              </select>
+          </div>
+          <div class="col-6 col-lg-2">
+              <select class="form-select" id="billMonthFilter" aria-label="Filter by billing month" style="border-radius:var(--radius-md);">
+                <option value="all">All Months</option>
+              </select>
+          </div>
+          <div class="col-6 col-lg-2 d-flex justify-content-lg-end">
             <button type="button" class="btn-create-bill w-100 w-md-auto" title="Create a bill" data-bs-toggle="modal" data-bs-target="#createBillModal">
               <i class="bi bi-plus-lg"></i>
               <span>Create Bill</span>
             </button>
+          </div>
+          <div class="col-12 d-flex align-items-center gap-3 flex-wrap">
+            <span class="lk-result-count" id="billResultCount" aria-live="polite"></span>
+            <button type="button" class="btn btn-link p-0 d-none" id="billClearFilters"><i class="bi bi-x-circle me-1"></i>Clear all filters</button>
           </div>
         </div>
 
@@ -297,7 +311,7 @@
           <div id="billEmpty" class="empty-state d-none">
             <i class="bi bi-receipt"></i>
             <p class="mb-0 fw-semibold">Nothing to show here right now</p>
-            <p class="text-muted-soft small">No bills match the current filter</p>
+            <p class="text-muted-soft small" id="billEmptyMsg">No bills match the current filter</p>
           </div>
         </div>
       </div>
@@ -312,17 +326,20 @@
         <!-- Search -->
         <div class="row g-3 mb-3">
           <div class="col-md-8">
-            <input type="text" class="form-control" id="proofSearch" placeholder="Search by tenant name, email or transaction ID..." style="border-radius:var(--radius-md);">
+            <input type="text" class="form-control" id="proofSearch" placeholder="Search tenant, email, phone, PG, room, transaction ID, amount..." aria-label="Search payment proofs" style="border-radius:var(--radius-md);">
           </div>
           <div class="col-md-2">
-              <select class="form-select" id="proofPgFilter" style="border-radius:var(--radius-md);">
+              <select class="form-select" id="proofPgFilter" aria-label="Filter by PG" style="border-radius:var(--radius-md);">
                 <option value="all">All PGs</option>
               </select>
           </div>
           <div class="col-md-2">
-              <select class="form-select" id="proofRoomFilter" style="border-radius:var(--radius-md);">
+              <select class="form-select" id="proofRoomFilter" aria-label="Filter by room" style="border-radius:var(--radius-md);">
                 <option value="all">All Rooms</option>
               </select>
+          </div>
+          <div class="col-12">
+            <button type="button" class="btn btn-link p-0 d-none" id="proofClearFilters"><i class="bi bi-x-circle me-1"></i>Clear all filters</button>
           </div>
         </div>
 
@@ -356,7 +373,7 @@
           <div id="proofsEmpty" class="empty-state d-none">
             <i class="bi bi-file-earmark-check"></i>
             <p class="mb-0 fw-semibold">No payment proofs found</p>
-            <p class="text-muted-soft small">No pending or verified payment proofs match your search</p>
+            <p class="text-muted-soft small" id="proofsEmptyMsg">No payment proofs match your search</p>
           </div>
         </div>
       </div>

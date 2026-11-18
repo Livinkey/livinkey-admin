@@ -148,18 +148,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ---- filter events ----
-    let searchTimer = null;
-    $id("maintenanceSearch")?.addEventListener("input", function (e) {
-        searchTerm = e.target.value;
-        clearTimeout(searchTimer);
-        searchTimer = setTimeout(loadMaintenance, 300);
-    });
+    const maintSearch = LKSearch.bind($id("maintenanceSearch"), (value) => {
+        searchTerm = value;
+        loadMaintenance();
+    }, { delay: 300 });
     const bind = (id, key, isCheck) => $id(id)?.addEventListener("change", (e) => { F[key] = isCheck ? e.target.checked : e.target.value; if (key === "month" && F.month) { F.from = ""; F.to = ""; $id("fFrom").value = ""; $id("fTo").value = ""; } if ((key === "from" || key === "to") && e.target.value) { F.month = ""; $id("fMonth").value = ""; } markActiveStat(); loadMaintenance(); });
     bind("fStatus", "status"); bind("fPg", "pg_id"); bind("fType", "issue_type"); bind("fMonth", "month"); bind("fDateField", "date_field");
     bind("fFrom", "from"); bind("fTo", "to"); bind("fImage", "has_image"); bind("fOverdue", "overdue", true); bind("fSort", "sort");
     $id("fClear")?.addEventListener("click", () => {
         Object.assign(F, { status: "", pg_id: "", issue_type: "", month: "", date_field: "created", from: "", to: "", has_image: "", overdue: false, sort: "status" });
-        searchTerm = ""; $id("maintenanceSearch").value = "";
+        searchTerm = ""; $id("maintenanceSearch").value = ""; maintSearch?.sync();
         ["fStatus", "fPg", "fType", "fMonth", "fImage", "fFrom", "fTo"].forEach(i => $id(i).value = "");
         $id("fDateField").value = "created"; $id("fSort").value = "status"; $id("fOverdue").checked = false;
         loadMaintenance();

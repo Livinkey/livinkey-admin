@@ -118,12 +118,12 @@ TERMS & CONDITIONS
     }
 
     function renderGrid(search = "") {
-        const f = search.trim().toLowerCase();
+        const prep = LKSearch.prepare(search);
         const statusQs = new URLSearchParams(window.location.search).get('status');
         let filtered = pgData.filter(p => {
             if (statusQs === 'active' && p.is_active !== 1) return false;
             if (statusQs === 'inactive' && p.is_active === 1) return false;
-            return !f || p.name?.toLowerCase().includes(f) || p.location?.toLowerCase().includes(f);
+            return LKSearch.matches(prep, [p.name, p.location, p.address, p.city, p.area, p.gender_type]);
         });
         
         const grid = document.getElementById("pgsGrid");
@@ -187,7 +187,7 @@ TERMS & CONDITIONS
         }).join("");
     }
 
-    document.getElementById("pgSearch")?.addEventListener("input", (e) => renderGrid(e.target.value));
+    LKSearch.bind(document.getElementById("pgSearch"), (value) => renderGrid(value));
 
     // Show/hide Add PG button
     const addPgBtn = document.querySelector('[data-bs-toggle="modal"][data-bs-target="#addPgModal"]');

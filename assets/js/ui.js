@@ -538,13 +538,84 @@
     };
     if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (Theme.pref() === 'system') Theme.apply(); });
 
+    // ------------------------------------------------------------ search
+    // One shared, predictable search for every list in the console.
+    //  - case / accent / extra-space insensitive
+    //  - every word typed must match (order does not matter): "rahul 204" finds Rahul in room 204
+    //  - punctuation-tolerant: "a101" finds "A-101", "98765 43210" finds "+91 98765-43210", "5000" finds "5,000"
+    const LKSearch = (() => {
+        const norm = (v) => String(v ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/\s+/g, ' ').trim();
+        const compact = (v) => norm(v).replace(/[^a-z0-9\u0900-\u097f]/g, '');
+
+        /** Turn what the person typed into reusable tokens. */
+        const prepare = (term) => {
+            const t = norm(term);
+            if (!t) return null;
+            const tokens = t.split(' ').filter(Boolean).map(w => ({ w, c: compact(w) }));
+            return { raw: t, tokens };
+        };
+
+        /** values: array of strings / numbers (null and undefined are ignored). */
+        const matches = (prepared, values) => {
+            if (!prepared) return true;
+            const parts = (Array.isArray(values) ? values : [values]).filter(v => v !== null && v !== undefined && v !== '');
+            const hay = norm(parts.join(' | '));
+            const cHay = compact(parts.join(' '));
+            return prepared.tokens.every(t => hay.includes(t.w) || (t.c && cHay.includes(t.c)));
+        };
+
+        /** Wire a text input: debounced, Esc clears, small clear button, Enter never submits a form. */
+        const bind = (input, onChange, opts = {}) => {
+            if (!input) return null;
+            const delay = opts.delay ?? 180;
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('spellcheck', 'false');
+            const fire = debounce(() => onChange(input.value, prepare(input.value)), delay);
+
+            let btn = null;
+            const holder = input.parentElement;
+            if (holder && !holder.classList.contains('input-group') && !input.dataset.lkNoClear) {
+                if (getComputedStyle(holder).position === 'static') holder.style.position = 'relative';
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'lk-search-clear';
+                btn.setAttribute('aria-label', 'Clear search');
+                btn.innerHTML = '&times;';
+                btn.hidden = true;
+                holder.appendChild(btn);
+                input.classList.add('lk-has-clear');
+            }
+            const sync = () => { if (btn) btn.hidden = !input.value; };
+            const clear = (focus = true) => {
+                input.value = ''; sync(); onChange('', null);
+                if (focus) input.focus();
+            };
+            input.addEventListener('input', () => { sync(); fire(); });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && input.value) { e.preventDefault(); clear(); }
+                else if (e.key === 'Enter') e.preventDefault();
+            });
+            if (btn) btn.addEventListener('click', () => clear());
+            sync();
+            return {
+                clear, sync,
+                get value() { return input.value; },
+                set(v) { input.value = v || ''; sync(); onChange(input.value, prepare(input.value)); }
+            };
+        };
+
+        return { norm, compact, prepare, matches, bind };
+    })();
+
     window.LKUI = {
         theme: Theme,
-        esc, debounce, parseDate, timeAgo, fmtDateTime, seen,
+        search: LKSearch, esc, debounce, parseDate, timeAgo, fmtDateTime, seen,
         toast, confirm: confirmDialog, prompt: promptDialog, runBatch,
         table: enhanceTable, downloadCSV, ls: LS,
         onRefresh: (fn) => Refresh.register(fn), refresh: (m) => Refresh.run(m), refreshState: Refresh,
         setOnline
     };
+    window.LKSearch = LKSearch;
     window.esc = window.esc || esc;
 })();

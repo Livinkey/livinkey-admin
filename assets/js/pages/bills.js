@@ -31,6 +31,13 @@ document.addEventListener("DOMContentLoaded", () => {
     let allPgs = [];
     let selectedBillPgId = "all";
     let selectedProofPgId = "all";
+    // Bills filters that run in the browser. They all work TOGETHER (search + room + month + tab).
+    let billRoomSel = "all";
+    let billMonthSel = "all";
+    let billSearchPrep = null;
+    // Payment-proof filters (same idea)
+    let proofRoomSel = "all";
+    let proofSearchPrep = null;
 
     const canAddBills = Permissions.canAdd('bills');
     const canEditBills = Permissions.canEdit('bills');
@@ -62,16 +69,93 @@ document.addEventListener("DOMContentLoaded", () => {
         select.value = current;
     }
 
+    function roomKey(b) { return String(b.room_id || b.room_number); }
+
+    function monthLabel(ym, long) {
+        const m = /^(\d{4})-(\d{2})$/.exec(String(ym || ""));
+        if (!m) return String(ym || "");
+        return new Date(Number(m[1]), Number(m[2]) - 1, 1).toLocaleString("en-IN", { month: long ? "long" : "short", year: "numeric" });
+    }
+
     function populateBillRoomFilter() {
         const select = document.getElementById("billRoomFilter");
         if (!select) return;
-        const current = select.value || "all";
-        const rooms = [...new Map(billData.filter(b => b.room_number).map(b => [
-            String(b.room_id || b.room_number), b
-        ])).values()].sort((a,b) => String(a.room_number).localeCompare(String(b.room_number)));
+        const rooms = [...new Map(billData.filter(b => b.room_number).map(b => [roomKey(b), b])).values()]
+            .sort((a, b) => String(a.pg_name || "").localeCompare(String(b.pg_name || "")) ||
+                String(a.room_number).localeCompare(String(b.room_number), undefined, { numeric: true }));
+        // Keep the choice only if that room is still in the list (e.g. after changing the PG).
+        if (billRoomSel !== "all" && !rooms.some(r => roomKey(r) === billRoomSel)) billRoomSel = "all";
         select.innerHTML = `<option value="all">All Rooms</option>` +
-            rooms.map(r => `<option value="${String(r.room_id || r.room_number)}">${lkEsc(r.pg_name || 'PG')} — Room ${lkEsc(r.room_number)}</option>`).join("");
-        select.value = current;
+            rooms.map(r => `<option value="${lkEsc(roomKey(r))}">${lkEsc(r.pg_name || 'PG')} — Room ${lkEsc(r.room_number)}</option>`).join("");
+        select.value = billRoomSel;
+    }
+
+    function populateBillMonthFilter() {
+        const select = document.getElementById("billMonthFilter");
+        if (!select) return;
+        const months = [...new Set(billData.map(b => b.billing_month).filter(Boolean))].sort().reverse();
+        if (billMonthSel !== "all" && !months.includes(billMonthSel)) billMonthSel = "all";
+        select.innerHTML = `<option value="all">All Months</option>` +
+            months.map(m => `<option value="${lkEsc(m)}">${lkEsc(monthLabel(m))}</option>`).join("");
+        select.value = billMonthSel;
+    }
+
+    // What the search box looks at for one bill
+    function billSearchValues(b) {
+        return [b.tenant_name, b.tenant_email, b.tenant_phone, b.pg_name, b.room_number,
+                b.billing_month, monthLabel(b.billing_month), monthLabel(b.billing_month, true),
+                String(b.status || "").replace(/_/g, " "), b.total_amount, b.due_amount, b.paid_amount];
+    }
+
+    const BILL_TABS = [
+        { key: "unpaid", label: "Unpaid", status: "unpaid" },
+        { key: "unfinished", label: "Partially Paid", status: "partially_paid" },
+        { key: "paid", label: "Paid", status: "paid" },
+        { key: "delayed", label: "Delayed", status: "delayed" },
+        { key: "overdue", label: "Overdue", status: "overdue" }
+    ];
+    const billInTab = (b, tabKey) => {
+        const t = BILL_TABS.find(x => x.key === tabKey);
+        return !t || b.status === t.status;
+    };
+
+    // Search + room + month (everything except the status tab). Never changes billData.
+    function billBase() {
+        return billData.filter(b =>
+            (billRoomSel === "all" || roomKey(b) === billRoomSel) &&
+            (billMonthSel === "all" || b.billing_month === billMonthSel) &&
+            LKSearch.matches(billSearchPrep, billSearchValues(b))
+        );
+    }
+
+    function billFiltersActive() {
+        return !!billSearchPrep || billRoomSel !== "all" || billMonthSel !== "all" || selectedBillPgId !== "all";
+    }
+
+    function updateBillFilterUi(shown, tabTotal) {
+        const countEl = document.getElementById("billResultCount");
+        const tab = BILL_TABS.find(t => t.key === activeTab);
+        if (countEl) {
+            countEl.textContent = billFiltersActive()
+                ? `Showing ${shown} of ${tabTotal} ${(tab ? tab.label : "").toLowerCase()} bill${tabTotal === 1 ? "" : "s"}`
+                : `${shown} ${(tab ? tab.label : "").toLowerCase()} bill${shown === 1 ? "" : "s"}`;
+        }
+        document.getElementById("billClearFilters")?.classList.toggle("d-none", !billFiltersActive());
+    }
+
+    function resetBillFilters() {
+        billSearchPrep = null; billRoomSel = "all"; billMonthSel = "all";
+        const si = document.getElementById("billSearch"); if (si) si.value = "";
+        si?.dispatchEvent(new Event("input"));
+        const r = document.getElementById("billRoomFilter"); if (r) r.value = "all";
+        const m = document.getElementById("billMonthFilter"); if (m) m.value = "all";
+        if (selectedBillPgId !== "all") {
+            selectedBillPgId = "all";
+            const pg = document.getElementById("billPgFilter"); if (pg) pg.value = "all";
+            loadData();
+        } else {
+            renderTabs(); renderTable();
+        }
     }
 
     function populateProofPgFilter() {
@@ -108,6 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 billData = billsRes.data || [];
                 window.LK_BILLS = billData;
                 populateBillRoomFilter();
+                populateBillMonthFilter();
             }
             if (unpaidRes.success) {
                 unpaidTenants = unpaidRes.data || [];
@@ -276,43 +361,42 @@ document.addEventListener("DOMContentLoaded", () => {
     // RENDER TABS
     // ============================================
     function renderTabs() {
-        const tabs = [
-            { key: "unpaid", label: "Unpaid" },
-            { key: "unfinished", label: "Partially Paid" },
-            { key: "paid", label: "Paid" },
-            { key: "delayed", label: "Delayed" },
-            { key: "overdue", label: "Overdue" }
-        ];
-        
-        document.getElementById("billTabs").innerHTML = tabs.map(t => `
-            <button class="filter-pill ${activeTab === t.key ? "active" : ""}" onclick="switchTab('${t.key}')">${lkEsc(t.label)}</button>
-        `).join("");
+        // Counts follow the search / room / month filters, so every number matches what you will see.
+        const base = billBase();
+        document.getElementById("billTabs").innerHTML = BILL_TABS.map(t => {
+            const n = base.filter(b => b.status === t.status).length;
+            return `<button class="filter-pill ${activeTab === t.key ? "active" : ""}" onclick="switchTab('${t.key}')">${lkEsc(t.label)}<span class="lk-pill-count">${n}</span></button>`;
+        }).join("");
     }
 
     // ============================================
     // RENDER BILL TABLE
     // ============================================
     function renderTable() {
-        let filtered = billData;
-        
-        if (activeTab === "unpaid") {
-            filtered = billData.filter(b => b.status === 'unpaid');
-        } else if (activeTab === "unfinished") {
-            filtered = billData.filter(b => b.status === 'partially_paid');
-        } else if (activeTab === "paid") {
-            filtered = billData.filter(b => b.status === 'paid');
-        } else if (activeTab === "delayed") {
-            filtered = billData.filter(b => b.status === 'delayed');
-        } else if (activeTab === "overdue") {
-            filtered = billData.filter(b => b.status === 'overdue' || b.status === 'delayed');
-        }
-        
+        const base = billBase();
+        const filtered = base.filter(b => billInTab(b, activeTab));
+        const tabTotal = billData.filter(b => billInTab(b, activeTab)).length;
+        updateBillFilterUi(filtered.length, tabTotal);
+
         const wrap = document.getElementById("billTableWrap");
         const empty = document.getElementById("billEmpty");
         
         if (filtered.length === 0) {
             wrap.innerHTML = '';
             empty.classList.remove("d-none");
+            const msg = document.getElementById("billEmptyMsg");
+            if (msg) {
+                const tab = BILL_TABS.find(t => t.key === activeTab);
+                const others = BILL_TABS.filter(t => t.key !== activeTab)
+                    .map(t => ({ t, n: base.filter(b => b.status === t.status).length })).filter(x => x.n > 0);
+                if (billFiltersActive()) {
+                    msg.innerHTML = `No ${lkEsc((tab?.label || "").toLowerCase())} bills match your search and filters.` +
+                        (others.length ? `<br>Matches in other tabs: ${others.map(x => `<a href="#" class="fw-semibold" onclick="switchTab('${x.t.key}');return false;">${lkEsc(x.t.label)} (${x.n})</a>`).join(" · ")}` : "") +
+                        `<br><a href="#" onclick="document.getElementById('billClearFilters').click();return false;">Clear all filters</a>`;
+                } else {
+                    msg.textContent = `There are no ${(tab?.label || "").toLowerCase()} bills right now.`;
+                }
+            }
             return;
         }
         empty.classList.add("d-none");
@@ -336,12 +420,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${filtered.map(b => `
                 <tr>
                     <td>
-                        <span class="name-link" onclick="openBillDetail('${b.id}')">${b.tenant_name || '—'}</span>
-                        <div class="small text-muted-soft">${b.tenant_email || '—'}</div>
+                        <span class="name-link" onclick="openBillDetail('${b.id}')">${lkEsc(b.tenant_name || '—')}</span>
+                        <div class="small text-muted-soft">${lkEsc(b.tenant_email || '—')}</div>
                     </td>
-                    <td>${b.billing_month || '—'}</td>
-                    <td>${b.pg_name || '—'}</td>
-                    <td>${b.room_number || '—'}</td>
+                    <td>${lkEsc(b.billing_month || '—')}</td>
+                    <td>${lkEsc(b.pg_name || '—')}</td>
+                    <td>${lkEsc(b.room_number || '—')}</td>
                     <td>${fmtINR(b.total_amount || 0)}</td>
                     <td>${fmtINR(b.paid_amount || 0)}</td>
                     <td>${fmtINR((b.due_amount || 0) > 0 ? b.due_amount : 0)}</td>
@@ -381,14 +465,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (!tbody) return;
 
-        if (proofData.length === 0) {
+        const rows = proofData.filter(p =>
+            (proofRoomSel === "all" || String(p.room_number || "") === proofRoomSel) &&
+            LKSearch.matches(proofSearchPrep, [p.tenant_name, p.tenant_email, p.tenant_phone, p.pg_name, p.room_number,
+                p.transaction_id, p.amount_paid, p.status])
+        );
+        const active = !!proofSearchPrep || proofRoomSel !== "all" || selectedProofPgId !== "all" || currentProofFilter !== "all";
+        const countEl = document.getElementById("proofCount");
+        if (countEl) countEl.textContent = active ? `Showing ${rows.length} of ${proofData.length}` : `${rows.length} proof${rows.length === 1 ? "" : "s"}`;
+        document.getElementById("proofClearFilters")?.classList.toggle("d-none", !active);
+
+        if (rows.length === 0) {
             tbody.innerHTML = '';
             empty.classList.remove("d-none");
+            const msg = document.getElementById("proofsEmptyMsg");
+            if (msg) msg.textContent = active ? "No payment proofs match your search and filters." : "No payment proofs have been submitted yet.";
             return;
         }
         empty.classList.add("d-none");
 
-        tbody.innerHTML = proofData.map(p => {
+        tbody.innerHTML = rows.map(p => {
             const statusColors = {
                 pending: 'status-pending',
                 verified: 'status-success',
@@ -421,7 +517,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         <div class="small ${billTotalClass}">of ${billTotalDisplay}</div>
                     </td>
                     <td>
-                        <code class="small">${p.transaction_id || '—'}</code>
+                        <code class="small">${lkEsc(p.transaction_id || '—')}</code>
                     </td>
                     <td>
                         ${p.proof_url ? `<img src="${p.proof_url}" alt="Proof" style="width:50px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;" onclick="previewProof('${p.id}')">` : '—'}
@@ -2000,53 +2096,41 @@ document.addEventListener("DOMContentLoaded", () => {
     // ============================================
     // SEARCH
     // ============================================
-    document.getElementById("billSearch")?.addEventListener("input", function() {
-        const term = this.value.trim().toLowerCase();
-        if (!term) {
-            loadData();
-            return;
-        }
-        const filtered = billData.filter(b => 
-            (b.tenant_name || '').toLowerCase().includes(term) ||
-            (b.pg_name || '').toLowerCase().includes(term) ||
-            (b.room_number || '').toLowerCase().includes(term) ||
-            (b.tenant_email || '').toLowerCase().includes(term)
-        );
-        const temp = billData;
-        billData = filtered;
+    LKSearch.bind(document.getElementById("billSearch"), (_raw, prep) => {
+        billSearchPrep = prep;
+        renderTabs();
         renderTable();
-        billData = temp;
     });
+
+    document.getElementById("billClearFilters")?.addEventListener("click", resetBillFilters);
 
     function populateProofRoomFilter() {
         const select = document.getElementById("proofRoomFilter");
         if (!select) return;
-        const current = select.value || "all";
-        const rooms = [...new Set(proofData.map(p => p.room_number).filter(Boolean))]
-            .sort((a,b) => String(a).localeCompare(String(b)));
+        const rooms = [...new Set(proofData.map(p => p.room_number).filter(Boolean).map(String))]
+            .sort((a,b) => a.localeCompare(b, undefined, { numeric: true }));
+        if (proofRoomSel !== "all" && !rooms.includes(proofRoomSel)) proofRoomSel = "all";
         select.innerHTML = `<option value="all">All Rooms</option>` +
-            rooms.map(r => `<option value="${String(r)}">Room ${String(r)}</option>`).join("");
-        select.value = current;
+            rooms.map(r => `<option value="${lkEsc(r)}">Room ${lkEsc(r)}</option>`).join("");
+        select.value = proofRoomSel;
     }
 
     // ============================================
     // PROOF SEARCH
     // ============================================
-    document.getElementById("proofSearch")?.addEventListener("input", function() {
-        const term = this.value.trim().toLowerCase();
-        if (!term) {
-            loadProofs();
-            return;
-        }
-        const filtered = proofData.filter(p =>
-            (p.tenant_name || '').toLowerCase().includes(term) ||
-            (p.tenant_email || '').toLowerCase().includes(term) ||
-            (p.transaction_id || '').toLowerCase().includes(term)
-        );
-        const temp = proofData;
-        proofData = filtered;
+    LKSearch.bind(document.getElementById("proofSearch"), (_raw, prep) => {
+        proofSearchPrep = prep;
         renderProofTable();
-        proofData = temp;
+    });
+
+    document.getElementById("proofClearFilters")?.addEventListener("click", () => {
+        proofSearchPrep = null; proofRoomSel = "all";
+        const si = document.getElementById("proofSearch"); if (si) { si.value = ""; si.dispatchEvent(new Event("input")); }
+        const rf = document.getElementById("proofRoomFilter"); if (rf) rf.value = "all";
+        const needsReload = selectedProofPgId !== "all" || currentProofFilter !== "all";
+        selectedProofPgId = "all"; currentProofFilter = "all";
+        const pg = document.getElementById("proofPgFilter"); if (pg) pg.value = "all";
+        if (needsReload) loadProofs(); else renderProofTable();
     });
 
     // ============================================
@@ -2058,25 +2142,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     document.getElementById("billRoomFilter")?.addEventListener("change", function() {
-        const room = this.value || "all";
-        const filtered = room === "all" ? billData : billData.filter(b =>
-            String(b.room_id || b.room_number) === String(room)
-        );
-        const temp = billData;
-        billData = filtered;
+        billRoomSel = this.value || "all";
+        renderTabs();
         renderTable();
-        billData = temp;
+    });
+
+    document.getElementById("billMonthFilter")?.addEventListener("change", function() {
+        billMonthSel = this.value || "all";
+        renderTabs();
+        renderTable();
     });
 
     document.getElementById("proofRoomFilter")?.addEventListener("change", function() {
-        const room = this.value || "all";
-        const filtered = room === "all" ? proofData : proofData.filter(p =>
-            String(p.room_number || "") === String(room)
-        );
-        const temp = proofData;
-        proofData = filtered;
+        proofRoomSel = this.value || "all";
         renderProofTable();
-        proofData = temp;
     });
 
     document.getElementById("proofPgFilter")?.addEventListener("change", function() {
@@ -2103,7 +2182,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (q) { const el = document.getElementById('billSearch'); if (el) el.value = q; }
         await loadPgs();
         await loadData();
-        if (q) document.getElementById('billSearch')?.dispatchEvent(new Event('input'));
+        if (q) { billSearchPrep = LKSearch.prepare(q); document.getElementById('billSearch')?.dispatchEvent(new Event('input')); renderTabs(); renderTable(); }
         if (qs.get('new') === '1' && canAddBills) { bootstrap.Modal.getOrCreateInstance(document.getElementById('createBillModal')).show(); history.replaceState(null, '', 'bills.html'); }
         if (window.location.hash !== '#proofs') {
             switchMainTab('bills', false);

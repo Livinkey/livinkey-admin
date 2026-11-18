@@ -710,10 +710,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 // Sync search input with URL/filter state for visible feedback
                 const searchInput = document.getElementById("tenantSearch");
-                if (searchInput && currentFilter && currentFilterType !== "text") {
-                    if (currentFilter === "__EFRRO_EXPIRING__") searchInput.value = "__EFRRO_EXPIRING__";
-                    else searchInput.value = currentFilter;
-                }
+                // (filter chips are shown in the heading; the search box only holds what you type)
                 
                 renderTable();
                 renderStats();
@@ -829,35 +826,27 @@ document.addEventListener("DOMContentLoaded", () => {
             currentFilter = "";
             currentFilterType = "";
         } else if (filter === "efrro-expiring") {
-            searchInput.value = "__EFRRO_EXPIRING__";
             currentFilter = "__EFRRO_EXPIRING__";
             currentFilterType = "efrro";
         } else if (filter === "residency:national") {
-            searchInput.value = "residency:national";
             currentFilter = "residency:national";
             currentFilterType = "residency";
         } else if (filter === "residency:international") {
-            searchInput.value = "residency:international";
             currentFilter = "residency:international";
             currentFilterType = "residency";
         } else if (filter === "gender:male") {
-            searchInput.value = "gender:male";
             currentFilter = "gender:male";
             currentFilterType = "gender";
         } else if (filter === "gender:female") {
-            searchInput.value = "gender:female";
             currentFilter = "gender:female";
             currentFilterType = "gender";
         } else if (filter === "paid") {
-            searchInput.value = "status:paid";
             currentFilter = "status:paid";
             currentFilterType = "status";
         } else if (filter === "partially_paid") {
-            searchInput.value = "status:partially_paid";
             currentFilter = "status:partially_paid";
             currentFilterType = "status";
         } else if (filter === "unpaid") {
-            searchInput.value = "status:unpaid";
             currentFilter = "status:unpaid";
             currentFilterType = "status";
         } else {
@@ -896,7 +885,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (currentFilterType === "efrro") tags.push({ icon: "bi-clock-history", text: "e-FRRO Expiring / Expired", cls: "tag-red" });
         else if (map[currentFilter]) tags.push({ icon: map[currentFilter][0], text: map[currentFilter][1], cls: map[currentFilter][2] });
         else if (currentDocFilter === "pending") tags.push({ icon: "bi-file-earmark-text", text: "Pending Docs", cls: "tag-amber" });
-        else {
+        {
             const q = document.getElementById("tenantSearch")?.value?.trim();
             if (q) tags.push({ icon: "bi-search", text: 'Search: ' + q, cls: "" });
         }
@@ -966,7 +955,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 // If not checked yet, include them (will be filtered out once cache is populated)
                 return true;
             });
-        } else if (searchVal) {
+        }
+
+        if (searchVal) {
             if (searchVal === "__efrro_expiring__") {
                 tenants = tenants.filter(t => {
                     if (t.residency !== 'international' || !t.efrro_till) return false;
@@ -990,14 +981,9 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (searchVal === "status:unpaid") {
                 tenants = tenants.filter(t => ['unpaid', 'delayed', 'overdue'].includes(String(t.bill_status || '').toLowerCase()));
             } else {
-                tenants = tenants.filter(t =>
-                    t.full_name?.toLowerCase().includes(searchVal) ||
-                    t.room_number?.toLowerCase().includes(searchVal) ||
-                    t.nationality?.toLowerCase().includes(searchVal) ||
-                    String(t.rent).includes(searchVal) ||
-                    t.gender?.toLowerCase().includes(searchVal) ||
-                    t.residency?.toLowerCase().includes(searchVal)
-                );
+                const prep = LKSearch.prepare(searchVal);
+                tenants = tenants.filter(t => LKSearch.matches(prep, [t.full_name, t.email, t.phone, t.room_number, t.pg_name,
+                    t.nationality, t.rent, t.gender, t.residency, String(t.bill_status || '').replace(/_/g, ' ')]));
             }
         }
 
@@ -1141,15 +1127,9 @@ document.addEventListener("DOMContentLoaded", () => {
         renderTable();
     });
 
-    document.getElementById("tenantSearch")?.addEventListener("input", function() {
-        // Clear pending docs filter when searching
-        const pendingDocsBtn = document.getElementById("pendingDocsFilter");
-        if (pendingDocsBtn) {
-            pendingDocsBtn.classList.remove('active');
-        }
-        currentDocFilter = "all";
-        currentFilterType = "";
-        currentFilter = "";
+    // Typing now narrows the CURRENT view (PG, status, gender, pending docs...) instead of wiping those filters.
+    LKSearch.bind(document.getElementById("tenantSearch"), () => {
+        if (currentFilterType === "text") { currentFilterType = ""; currentFilter = ""; }
         renderTable();
     });
 

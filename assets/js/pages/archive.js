@@ -71,7 +71,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await API.tenants.archiveList(params);
             rows = (res.success && res.data) ? res.data : [];
             if (!rows.length) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">No archived or checked-out tenants found.</td></tr>';
+                const filtered = Object.values(params).some(v => v !== undefined);
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">${filtered
+                    ? 'No tenants match your search and filters. <a href="#" id="archiveEmptyClear">Clear filters</a>'
+                    : 'No archived or checked-out tenants found.'}</td></tr>`;
+                document.getElementById('archiveEmptyClear')?.addEventListener('click', (e) => { e.preventDefault(); clearArchiveFilters(); });
                 return;
             }
             tbody.innerHTML = rows.map(t => {
@@ -316,10 +320,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.row-check').forEach(c => { c.checked = e.target.checked; });
         updateBulkButtons();
     });
-    document.getElementById('btnApplyFilters').addEventListener('click', loadList);
-    document.getElementById('filterSearch').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') loadList();
-    });
+    // Filters apply instantly (no Apply button): search is debounced, dropdowns apply on change.
+    const archiveSearch = LKSearch.bind(document.getElementById('filterSearch'), () => loadList(), { delay: 350 });
+    ['filterStatus', 'filterGender', 'filterResidency', 'filterYear', 'filterMonth'].forEach(id =>
+        document.getElementById(id)?.addEventListener('change', () => loadList()));
+    function clearArchiveFilters() {
+        document.getElementById('filterSearch').value = '';
+        archiveSearch?.sync();
+        ['filterStatus', 'filterGender', 'filterResidency', 'filterYear', 'filterMonth'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        loadList();
+    }
+    document.getElementById('btnClearFilters')?.addEventListener('click', clearArchiveFilters);
     document.getElementById('btnRestoreSelected').addEventListener('click', () => {
         const ids = selectedIds();
         if (ids.length) confirmRestore(ids);

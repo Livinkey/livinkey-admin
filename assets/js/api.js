@@ -544,7 +544,11 @@ const API = {
             apiRequest('/tenants/auth/forgot-password', 'POST', { email }),
         verifyOTP: (email, otp) => 
             apiRequest('/tenants/auth/verify-otp', 'POST', { email, otp }),
-        resetPassword: (resetToken, new_password, confirm_password) => 
+        // NOTE: named differently on purpose. `resetPassword(id)` above is the ADMIN action
+        // (super admin resets a tenant's password). This one is the tenant self-service flow;
+        // sharing the same name silently overrode the admin action and caused
+        // "Reset token, new password, and confirm password are required."
+        resetPasswordWithToken: (resetToken, new_password, confirm_password) => 
             apiRequest('/tenants/auth/reset-password', 'POST', { resetToken, new_password, confirm_password }),
         home: () => 
             apiRequest('/tenants/home', 'GET'),

@@ -14,6 +14,11 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentFilter = "all";
     let currentPgFilter = "all";
     let searchTerm = "";
+    let searchPrep = null;
+    let feedbackAll = [];
+    const applyFeedbackSearch = (rows) => !searchPrep ? rows : rows.filter(f =>
+        LKSearch.matches(searchPrep, [f.tenant_name, f.tenant_email, f.pg_name, f.room_number, f.comment,
+            f.nationality, f.gender, f.user_type, f.feedback_type, f.overall_rating]));
     let pgList = [];
     let currentUserTypeFilter = "all";
 
@@ -40,7 +45,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             if (currentPgFilter !== "all") params.pg_id = currentPgFilter;
-            if (searchTerm) params.pg_name = searchTerm;
             if (currentUserTypeFilter !== "all") params.user_type = currentUserTypeFilter;
 
             const res = await API.feedbacks.admin.all(params);
@@ -60,7 +64,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     data = data.filter(f => f.gender && f.gender.toLowerCase() === 'female');
                 }
                 
-                feedbackData = data;
+                feedbackAll = data;
+                feedbackData = applyFeedbackSearch(feedbackAll);
                 renderFeedbacks();
             } else {
                 showToast(res.message || "Failed to load feedbacks", "danger");
@@ -383,9 +388,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // ============================================
     // SEARCH
     // ============================================
-    document.getElementById("feedbackSearch")?.addEventListener("input", function(e) {
-        searchTerm = e.target.value;
-        loadFeedbacks();
+    LKSearch.bind(document.getElementById("feedbackSearch"), (value, prep) => {
+        searchTerm = value;
+        searchPrep = prep;
+        feedbackData = applyFeedbackSearch(feedbackAll);   // filter what is already loaded - no reload, no flicker
+        renderFeedbacks();
     });
 
     // ============================================

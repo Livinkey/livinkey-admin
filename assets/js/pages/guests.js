@@ -92,16 +92,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function renderGrid() {
-        const f = searchTerm.trim().toLowerCase();
-        let filtered = guestData;
-        if (f) {
-            filtered = guestData.filter(g =>
-                (g.full_name || '').toLowerCase().includes(f) ||
-                (g.nationality || '').toLowerCase().includes(f) ||
-                (g.email || '').toLowerCase().includes(f) ||
-                (g.phone || '').includes(f)
-            );
-        }
+        const prep = LKSearch.prepare(searchTerm);
+        const filtered = !prep ? guestData : guestData.filter(g =>
+            LKSearch.matches(prep, [g.full_name, g.nationality, g.email, g.phone, g.country_code, g.gender]));
 
         const grid = document.getElementById("guestsGrid");
         if (!grid) return;
@@ -142,8 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
         `).join("");
     }
 
-    document.getElementById("guestSearch")?.addEventListener("input", function(e) {
-        searchTerm = e.target.value;
+    LKSearch.bind(document.getElementById("guestSearch"), (value) => {
+        searchTerm = value;
         renderGrid();
     });
 

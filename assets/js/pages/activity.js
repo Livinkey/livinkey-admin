@@ -180,7 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
         LOADER.hide(btn);
     });
 
-    ["searchInput","roleFilter","pgFilter","moduleFilter","actionFilter","statusFilter","fromDate","toDate"].forEach(id=>document.getElementById(id)?.addEventListener(id==="searchInput"?"input":"change",()=>{page=1;loadUsers();}));
+    ["searchInput","roleFilter","pgFilter","moduleFilter","actionFilter","statusFilter","fromDate","toDate"].forEach(id=>document.getElementById(id)?.addEventListener(id==="searchInput"?"input":"change",id==="searchInput"?LKUI.debounce(()=>{page=1;loadUsers();},350):()=>{page=1;loadUsers();}));
     document.getElementById("clearFilters")?.addEventListener("click",()=>{
         ["searchInput","fromDate","toDate"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
         ["roleFilter","pgFilter","moduleFilter","actionFilter","statusFilter"].forEach(id=>{const el=document.getElementById(id); if(el) el.value="";});
