@@ -564,11 +564,16 @@ document.addEventListener("DOMContentLoaded", () => {
             (doc.mime_type && String(doc.mime_type).toLowerCase().includes('pdf')) ||
             (doc.document_type === 'agreement' && !lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i));
         if (body) {
+            body.innerHTML = '<div id="docPreviewViewer"></div>';
+            const viewer = body.querySelector('#docPreviewViewer');
             if (isPdf || (!lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) && lower.includes('cloudinary') && !lower.includes('/image/'))) {
-                body.innerHTML = `<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff;" title="Preview"></iframe>
-                    <p class="text-muted-soft small mt-2 mb-0">If the preview does not load, use Download.</p>`;
+                // PDFs (agreements...) are streamed through the API – see lkRenderDocPreview in api.js
+                window.lkRenderDocPreview(viewer, doc.id, label);
             } else {
-                body.innerHTML = `<img id="docPreviewImg" src="${url}" alt="${lkEsc(label)}" class="img-fluid" style="max-height:70vh;object-fit:contain;border-radius:8px;" onerror="this.src='https://placehold.co/600x400/E1E8D8/7C8A76?text=No+Image'">`;
+                viewer.innerHTML = `<img id="docPreviewImg" src="${url}" alt="${lkEsc(label)}" class="img-fluid" style="max-height:70vh;object-fit:contain;border-radius:8px;">`;
+                const im = viewer.querySelector('img');
+                // If the direct image link is blocked, fall back to the API stream.
+                im.onerror = function () { this.onerror = null; window.lkRenderDocPreview(viewer, doc.id, label); };
             }
         } else if (img) {
             img.src = url;

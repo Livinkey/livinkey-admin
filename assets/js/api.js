@@ -369,6 +369,50 @@ window.openAuthorizedUrl = async function (path) {
     }
 };
 
+// ============ DOCUMENT PREVIEW (PDF / image) ============
+// Stored documents are streamed through the API (never redirected to the storage host), so PDFs such as
+// tenant agreements always open. The file is fetched with the normal session header and shown from a
+// local blob: URL, which also keeps the session token out of any URL.
+window.lkFetchDocumentBlob = async function (id) {
+    const session = sessionStorage.getItem('lk_token');
+    if (!session) throw new Error('Please sign in again to continue.');
+    let res;
+    try {
+        res = await fetch(`${API_CONFIG.baseURL}/documents/admin/${encodeURIComponent(id)}/view`, {
+            headers: { 'Authorization': `Bearer ${session}` }
+        });
+    } catch (_) {
+        throw new Error('Cannot reach the server. Check your internet connection and try again.');
+    }
+    if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.message || 'The document could not be opened.');
+    }
+    const blob = await res.blob();
+    return { url: URL.createObjectURL(blob), type: blob.type || '' };
+};
+
+window.lkRenderDocPreview = async function (container, docId, label) {
+    if (!container) return;
+    if (container._lkBlobUrl) { URL.revokeObjectURL(container._lkBlobUrl); container._lkBlobUrl = null; }
+    const esc = window.lkEsc;
+    container.innerHTML = '<div class="text-center text-muted-soft py-5"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading document…</div>';
+    try {
+        const f = await window.lkFetchDocumentBlob(docId);
+        container._lkBlobUrl = f.url;
+        if (/pdf/i.test(f.type)) {
+            container.innerHTML = `<iframe src="${f.url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff;" title="${esc(label || 'Document')}"></iframe>
+                <p class="small mt-2 mb-0 text-muted-soft">Not showing? <a href="${f.url}" target="_blank" rel="noopener">Open in a new tab</a> or use Download.</p>`;
+        } else {
+            container.innerHTML = `<img src="${f.url}" alt="${esc(label || 'Document')}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;">`;
+        }
+    } catch (err) {
+        container.innerHTML = `<div class="text-center py-5"><i class="bi bi-exclamation-triangle" style="font-size:2rem;color:#e0a030;"></i>
+            <p class="mt-2 mb-1">${esc(err.message || 'The document could not be opened.')}</p>
+            <p class="small text-muted-soft mb-0">You can still try Download, or ask the tenant to upload the file again.</p></div>`;
+    }
+};
+
 // ============ PERMISSION UTILITIES ============
 function getAdminPermissions() {
     const session = Auth.getSession();

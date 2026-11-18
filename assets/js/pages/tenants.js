@@ -2406,11 +2406,19 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const lower = (url || '').toLowerCase();
         const isPdf = lower.includes('.pdf') || lower.includes('application/pdf') || lower.includes('/raw/');
-        // Cloudinary raw resources and explicit pdfs → iframe; images → img
-        if (isPdf || (!lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) && lower.includes('cloudinary'))) {
-            // Prefer direct open for PDFs that may block iframe; still try iframe first
-            body.innerHTML = `<iframe src="${url}" style="width:100%;height:70vh;border:none;border-radius:8px;background:#fff;" title="Preview"></iframe>
-                <p class="text-muted-soft small mt-2 mb-0">If the preview does not load, use Download.</p>`;
+        const hasId = docId && docId !== 'undefined' && docId !== 'null';
+        if (hasId) {
+            // Everything is streamed through the API (see lkRenderDocPreview in api.js) so PDFs always open.
+            body.innerHTML = '<div id="docPreviewViewer"></div>';
+            const viewer = body.querySelector('#docPreviewViewer');
+            if (isPdf || (!lower.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i) && lower.includes('cloudinary'))) {
+                window.lkRenderDocPreview(viewer, docId, title);
+            } else {
+                viewer.innerHTML = `<img src="${lkEsc(url)}" alt="${lkEsc(title || 'Document')}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;">`;
+                viewer.querySelector('img').onerror = function () { this.onerror = null; window.lkRenderDocPreview(viewer, docId, title); };
+            }
+        } else if (isPdf) {
+            body.innerHTML = `<p class="text-center py-4">This file can only be opened with Download.</p>`;
         } else {
             body.innerHTML = `<img src="${lkEsc(url)}" alt="${lkEsc(title || 'Document')}" style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:8px;">`;
         }
@@ -2599,7 +2607,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const docStatus = { approved: 'chip-green', pending: 'chip-amber', rejected: 'chip-red' };
             html += `<div class="section-card mb-3"><div class="card-head"><h6 class="mb-0"><i class="bi bi-files me-2"></i>Documents (${documents.length})</h6></div>` +
                 (documents.length ? `<div class="table-responsive"><table class="data-table mb-0"><thead><tr><th>Type</th><th>File</th><th>Status</th><th>Uploaded</th><th></th></tr></thead><tbody>` +
-                    documents.map(d => `<tr><td style="text-transform:capitalize">${vx(String(d.document_type || '').replace(/_/g, ' '))}</td><td>${vx(d.original_name)}</td><td><span class="chip ${docStatus[d.review_status] || 'chip-gray'}">${vx(d.review_status)}</span></td><td>${vdate(d.created_at)}</td><td class="text-end">${d.document_url ? `<a class="btn-icon" target="_blank" rel="noopener" href="${LKUI.esc(d.document_url)}" title="Open"><i class="bi bi-box-arrow-up-right"></i></a>` : ''}</td></tr>`).join('') +
+                    documents.map(d => `<tr><td style="text-transform:capitalize">${vx(String(d.document_type || '').replace(/_/g, ' '))}</td><td>${vx(d.original_name)}</td><td><span class="chip ${docStatus[d.review_status] || 'chip-gray'}">${vx(d.review_status)}</span></td><td>${vdate(d.created_at)}</td><td class="text-end">${d.id ? `<button type="button" class="btn-icon" title="Open" onclick="downloadDoc('${d.id}')"><i class="bi bi-box-arrow-up-right"></i></button>` : ''}</td></tr>`).join('') +
                     `</tbody></table></div>` : '<div class="text-muted-soft">No documents uploaded yet.</div>') + `</div>`;
 
             const bst = { paid: 'chip-green', partially_paid: 'chip-amber', unpaid: 'chip-red', overdue: 'chip-red', delayed: 'chip-red' };
@@ -2676,7 +2684,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!r.success) throw new Error(r.message || "Could not reset the password");
             if (fromView && viewModal) viewModal.hide();
             showToast(r.message || "New password sent", "success");
-        } catch (e) { showToast(e.message || "Could not reset the password", "danger"); }
+        } catch (e) {
+            // "Route not found" = the API server is still running an older build that lacks this endpoint.
+            const stale = /route not found/i.test(e.message || '') || e.status === 404 && !/tenant not found/i.test(e.message || '');
+            showToast(stale
+                ? "The server needs to be updated before passwords can be reset. Deploy the latest backend (check that https://api.livinkey.com/ lists \"admin-reset-password\") and try again."
+                : (e.message || "Could not reset the password"), "danger");
+        }
     };
 
     window.unblockTenant = async function(id, fromView) {
