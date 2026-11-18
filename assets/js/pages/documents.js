@@ -8,22 +8,35 @@ document.addEventListener("DOMContentLoaded", () => {
     const canViewDocs = Permissions.canView('documents');
     const canAddDocs = Permissions.canAdd('documents');
 
+    // label = ONE document ("Visa"); plural = several ("Visas"). Use typeLabel(key, count) so
+    // "1 Visa" / "2 Visas" are always right.
     const DOC_TYPES = {
-        passport_photo: { label: "Photos", icon: "bi-person", color: "#3E7CB1" },
-        signature: { label: "Signatures", icon: "bi-pen", color: "#7C5CFC" },
-        tenant_aadhaar: { label: "Aadhar Cards", icon: "bi-card-text", color: "#4F8F2E" },
-        parent_aadhaar: { label: "Parent Aadhar", icon: "bi-card-text", color: "#6FA030" },
-        passport: { label: "Passports", icon: "bi-passport", color: "#E2A238" },
-        visa: { label: "Visas", icon: "bi-stamp", color: "#D9483F" },
-        arrival_stamp: { label: "Arrival Stamps", icon: "bi-stamp", color: "#4B7B8A" },
-        c_form: { label: "C-Forms", icon: "bi-file-earmark-text", color: "#92C24A" },
-        efrro: { label: "E-FRRO", icon: "bi-file-earmark-check", color: "#7C8A76" },
-        agreement: { label: "Agreements", icon: "bi-file-earmark-text", color: "#6B4E71" },
-        university_id: { label: "University IDs", icon: "bi-mortarboard", color: "#8B6FA3" },
+        passport_photo: { label: "Passport Size Photo", plural: "Passport Size Photos", icon: "bi-person", color: "#3E7CB1" },
+        signature: { label: "Signature", plural: "Signatures", icon: "bi-pen", color: "#7C5CFC" },
+        tenant_aadhaar_front: { label: "Tenant Aadhaar (Front)", plural: "Tenant Aadhaar (Front)", icon: "bi-card-text", color: "#4F8F2E" },
+        tenant_aadhaar_back: { label: "Tenant Aadhaar (Back)", plural: "Tenant Aadhaar (Back)", icon: "bi-card-text", color: "#5A9A33" },
+        parent_aadhaar_front: { label: "Parent Aadhaar (Front)", plural: "Parent Aadhaar (Front)", icon: "bi-card-text", color: "#6FA030" },
+        parent_aadhaar_back: { label: "Parent Aadhaar (Back)", plural: "Parent Aadhaar (Back)", icon: "bi-card-text", color: "#7BAA3C" },
+        // Older single-sided uploads (made before front/back existed) – tile is shown only when some exist
+        tenant_aadhaar: { label: "Tenant Aadhaar", plural: "Tenant Aadhaar", icon: "bi-card-text", color: "#4F8F2E", legacy: true },
+        parent_aadhaar: { label: "Parent Aadhaar", plural: "Parent Aadhaar", icon: "bi-card-text", color: "#6FA030", legacy: true },
+        passport: { label: "Passport", plural: "Passports", icon: "bi-passport", color: "#E2A238" },
+        visa: { label: "Visa", plural: "Visas", icon: "bi-stamp", color: "#D9483F" },
+        arrival_stamp: { label: "Arrival Stamp", plural: "Arrival Stamps", icon: "bi-stamp", color: "#4B7B8A" },
+        c_form: { label: "C-Form", plural: "C-Forms", icon: "bi-file-earmark-text", color: "#92C24A" },
+        efrro: { label: "E-FRRO", plural: "E-FRROs", icon: "bi-file-earmark-check", color: "#7C8A76" },
+        agreement: { label: "Agreement", plural: "Agreements", icon: "bi-file-earmark-text", color: "#6B4E71" },
+        university_id: { label: "University ID", plural: "University IDs", icon: "bi-mortarboard", color: "#8B6FA3" },
         // Vehicle
-        vehicle_photo: { label: "Vehicle Photo", icon: "bi-car-front", color: "#0D9488" },
-        vehicle_rc: { label: "RC Photo", icon: "bi-card-heading", color: "#0891B2" },
-        driver_license: { label: "Driver License", icon: "bi-person-vcard", color: "#2563EB" }
+        vehicle_photo: { label: "Vehicle Photo", plural: "Vehicle Photos", icon: "bi-car-front", color: "#0D9488" },
+        vehicle_rc: { label: "RC Photo", plural: "RC Photos", icon: "bi-card-heading", color: "#0891B2" },
+        driver_license: { label: "Driver License", plural: "Driver Licenses", icon: "bi-person-vcard", color: "#2563EB" }
+    };
+    const typeLabel = (key, n = 1) => {
+        if (key === "vehicle_all") return Number(n) === 1 ? "Vehicle document" : "Vehicle documents";
+        const t = DOC_TYPES[key];
+        if (!t) return key || "Document";
+        return Number(n) === 1 ? t.label : t.plural;
     };
 
     const VEHICLE_DOC_KEYS = ["vehicle_photo", "vehicle_rc", "driver_license"];
@@ -198,9 +211,10 @@ document.addEventListener("DOMContentLoaded", () => {
         ];
 
         Object.keys(DOC_TYPES).forEach(key => {
+            if (DOC_TYPES[key].legacy && !(counts[key] > 0)) return; // hide old single-sided Aadhaar tiles when empty
             stats.push({
                 key: key,
-                label: DOC_TYPES[key].label,
+                label: typeLabel(key, counts[key] || 0),
                 icon: DOC_TYPES[key].icon,
                 color: DOC_TYPES[key].color,
                 count: counts[key] || 0
@@ -254,14 +268,14 @@ document.addEventListener("DOMContentLoaded", () => {
             empty.classList.remove("d-none");
             if (totalCount) totalCount.textContent = currentFilter === "all"
                 ? "0 documents"
-                : `0 ${DOC_TYPES[currentFilter]?.label || currentFilter}`;
+                : `0 ${typeLabel(currentFilter, 0)}`;
             return;
         }
         empty.classList.add("d-none");
         if (totalCount) {
             totalCount.textContent = currentFilter === "all"
-                ? `${filtered.length} documents`
-                : `${filtered.length} ${DOC_TYPES[currentFilter]?.label || currentFilter}`;
+                ? `${filtered.length} document${filtered.length === 1 ? "" : "s"}`
+                : `${filtered.length} ${typeLabel(currentFilter, filtered.length)}`;
         }
 
         grid.innerHTML = filtered.map(d => {

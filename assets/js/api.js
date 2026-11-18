@@ -451,6 +451,7 @@ const API = {
             apiRequest(`/admins?search=${encodeURIComponent(search)}`, 'GET'),
         getById: (id) => 
             apiRequest(`/admins/${id}`, 'GET'),
+        resetPassword: (id) => apiRequest(`/admins/${id}/reset-password`, 'POST', {}),
         update: (id, data, file) => {
             const formData = new FormData();
             Object.keys(data).forEach(k => formData.append(k, data[k]));
@@ -492,6 +493,7 @@ const API = {
         getFull: (id) => apiRequest(`/tenants/${id}/full`, 'GET'),
         block: (id, reason) => apiRequest(`/tenants/${id}/block`, 'POST', { reason }),
         unblock: (id) => apiRequest(`/tenants/${id}/unblock`, 'POST', {}),
+        resetPassword: (id) => apiRequest(`/tenants/${id}/reset-password`, 'POST', {}),
         update: (id, data, files) => {
             const formData = new FormData();
             Object.keys(data).forEach(k => formData.append(k, data[k]));
@@ -775,6 +777,7 @@ const API = {
     },
 
     pgs: {
+        updateRoomCapacity: (roomId, capacity) => apiRequest(`/pgs/rooms/${roomId}/capacity`, 'PUT', { capacity }),
         create: (data, files) => {
             const formData = new FormData();
             Object.keys(data).forEach(k => {

@@ -153,6 +153,7 @@ function doRender(activeKey, pageTitle, pageSub) {
     window.LK_ADMIN_PERMISSIONS = permissions;
     window.LK_ADMIN_ROLE = role;
     window.LK_IS_SUPER_ADMIN = isSuperAdmin;
+    window.LK_ME = { id: admin.id || session.id || null };
 
     let finalActiveKey = activeKey;
     if (window.location.hash === '#proofs' && activeKey === 'bills') finalActiveKey = 'proofs';

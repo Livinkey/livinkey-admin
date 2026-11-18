@@ -157,9 +157,15 @@ document.addEventListener("DOMContentLoaded", () => {
     // ============================================
     // DOCUMENT STATUS CHECKING
     // ============================================
+    // Aadhaar has two sides: front and back, for the tenant and for the parent.
+    // An older single-sided upload (tenant_aadhaar / parent_aadhaar) still counts as the FRONT.
+    const DOC_LEGACY_ALIAS = { tenant_aadhaar_front: 'tenant_aadhaar', parent_aadhaar_front: 'parent_aadhaar' };
+    const hasDocType = (uploadedTypes, key) => uploadedTypes.includes(key) || (DOC_LEGACY_ALIAS[key] && uploadedTypes.includes(DOC_LEGACY_ALIAS[key]));
+    const NATIONAL_DOC_KEYS = ['passport_photo', 'signature', 'tenant_aadhaar_front', 'tenant_aadhaar_back', 'parent_aadhaar_front', 'parent_aadhaar_back', 'university_id', 'agreement'];
+
     function getRequiredDocumentTypes(residency) {
         if (residency === 'national') {
-            return ['passport_photo', 'signature', 'tenant_aadhaar', 'parent_aadhaar', 'university_id', 'agreement'];
+            return NATIONAL_DOC_KEYS;
         } else {
             return ['passport_photo', 'signature', 'passport', 'visa', 'arrival_stamp', 'c_form', 'efrro', 'university_id', 'agreement'];
         }
@@ -187,7 +193,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const uploadedTypes = docs.map(d => d.document_type);
             const requiredTypes = getRequiredDocumentTypes(residency || 'national');
-            const missing = requiredTypes.filter(type => !uploadedTypes.includes(type));
+            const missing = requiredTypes.filter(type => !hasDocType(uploadedTypes, type));
             const hasAll = missing.length === 0;
             
             // Cache the result
@@ -1076,6 +1082,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     ${canEditTenants ? (Number(t.is_blocked) === 1
                         ? `<button class="btn-icon" title="Unblock tenant" onclick="unblockTenant('${t.id}')"><i class="bi bi-unlock"></i></button>`
                         : `<button class="btn-icon" title="Block tenant" onclick="blockTenant('${t.id}')"><i class="bi bi-slash-circle"></i></button>`) : ''}
+                    ${window.LK_IS_SUPER_ADMIN ? `<button class="btn-icon" title="Reset password (sends new login details)" onclick="resetTenantPassword('${t.id}')"><i class="bi bi-key"></i></button>` : ''}
                     ${canDeleteTenants ? `<button class="btn-icon" title="Check Out" onclick="checkoutTenant('${t.id}')"><i class="bi bi-box-arrow-right"></i></button>
                     <button class="btn-icon" title="Archive" onclick="archiveTenant('${t.id}')"><i class="bi bi-archive"></i></button>` : ''}
                 </div></td>
@@ -1212,28 +1219,84 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    async function loadRoomDropdown(pgId, selectId, excludeRoom = null) {
+    // Rooms of the PG currently shown in the add-tenant form: room_number -> {id, capacity, occupied}
+    let roomInfo = {};
+
+    async function loadRoomDropdown(pgId, selectId, excludeRoom = null, includeFull = false, keepRoom = null) {
         const select = document.getElementById(selectId);
         if (!select || !pgId) {
-            select.innerHTML = `<option value="">Select room...</option>`;
+            if (select) select.innerHTML = `<option value="">Select room...</option>`;
+            if (selectId === "tRoom") { roomInfo = {}; refreshRoomCapacityInfo(); }
             return;
         }
         try {
             const res = await API.pgs.getById(pgId);
             if (res.success && res.data) {
                 const pg = res.data;
-                const available = pg.floors?.flatMap(f =>
-                    f.rooms?.filter(r =>
-                        (r.occupied_count || 0) < r.capacity || r.room_number === excludeRoom
-                    ) || []
-                ) || [];
+                const all = pg.floors?.flatMap(f => f.rooms || []) || [];
+                if (selectId === "tRoom") {
+                    roomInfo = {};
+                    all.forEach(r => { roomInfo[r.room_number] = { id: r.id, capacity: Number(r.capacity) || 0, occupied: Number(r.occupied_count) || 0 }; });
+                }
+                const shown = all.filter(r => includeFull || (r.occupied_count || 0) < r.capacity || r.room_number === excludeRoom);
+                const selectedNo = keepRoom || excludeRoom;
                 select.innerHTML = `<option value="">Select room...</option>` +
-                    available.map(r => `<option value="${lkEsc(r.room_number)}" ${r.room_number === excludeRoom ? 'selected' : ''}>${lkEsc(r.room_number)} (${r.occupied_count || 0}/${r.capacity})</option>`).join("");
+                    shown.map(r => {
+                        const full = (r.occupied_count || 0) >= r.capacity;
+                        return `<option value="${lkEsc(r.room_number)}" ${r.room_number === selectedNo ? 'selected' : ''}>${lkEsc(r.room_number)} (${r.occupied_count || 0}/${r.capacity}${full ? ', full' : ''})</option>`;
+                    }).join("");
+                if (selectId === "tRoom") refreshRoomCapacityInfo();
             }
         } catch (error) {
             select.innerHTML = `<option value="">Error loading rooms</option>`;
         }
     }
+
+    // Shows "Room 101 allows 2 tenants · 1 living there · 1 free" + keeps the "sharing" box within what is free.
+    function refreshRoomCapacityInfo() {
+        const box = document.getElementById("roomCapacityInfo");
+        const txt = document.getElementById("roomCapacityText");
+        const num = document.getElementById("numTenants");
+        const roomNo = document.getElementById("tRoom")?.value;
+        const info = roomNo ? roomInfo[roomNo] : null;
+        if (!box) return;
+        if (!info) { box.classList.add("d-none"); if (num) num.max = 4; return; }
+        const free = Math.max(0, info.capacity - info.occupied);
+        const pl = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+        txt.innerHTML = `Room <strong>${lkEsc(roomNo)}</strong> allows <strong>${pl(info.capacity, 'tenant')}</strong> · ${info.occupied} living there · <strong class="${free ? '' : 'text-danger'}">${free} free</strong>`;
+        box.classList.remove("d-none");
+        if (num) {
+            num.max = Math.max(1, free);
+            if ((parseInt(num.value) || 1) > Math.max(1, free)) num.value = Math.max(1, free);
+        }
+    }
+
+    document.getElementById("tRoom")?.addEventListener("change", refreshRoomCapacityInfo);
+
+    // Admin can raise (or lower, never below the people already living there) the number of tenants a room allows.
+    document.getElementById("editRoomCapacityBtn")?.addEventListener("click", async function () {
+        const roomNo = document.getElementById("tRoom").value;
+        const pgId = document.getElementById("tPg").value;
+        const info = roomInfo[roomNo];
+        if (!roomNo || !info) { showToast("Please select a room first.", "warning"); return; }
+        const val = await LKUI.prompt({
+            title: `Tenants allowed in room ${roomNo}`,
+            body: `${info.occupied} tenant${info.occupied === 1 ? '' : 's'} currently live in this room. This changes the room's limit everywhere (PG management included).`,
+            label: 'Number of tenants allowed', value: String(info.capacity), placeholder: 'e.g. 3', confirmText: 'Save'
+        });
+        if (val === null || val === undefined) return;
+        const n = parseInt(String(val).trim(), 10);
+        if (!Number.isInteger(n) || n < 1 || n > 10) { showToast("Enter a whole number from 1 to 10.", "warning"); return; }
+        if (n === info.capacity) return;
+        const btn = this; btn.disabled = true;
+        try {
+            const r = await API.pgs.updateRoomCapacity(info.id, n);
+            if (!r.success) throw new Error(r.message || "Could not update the room");
+            showToast(r.message || "Room updated", "success");
+            await loadRoomDropdown(pgId, "tRoom", null, true, roomNo);
+        } catch (e) { showToast(e.message || "Could not update the room", "danger"); }
+        finally { btn.disabled = false; }
+    });
 
     async function getRoomIdByNumber(pgId, roomNumber) {
         try {
@@ -1348,7 +1411,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPgDropdown("tPg");
         document.getElementById("tRole").value = "Tenant";
         toggleRoleFields();
-        document.getElementById("numTenants").value = 1;
+        document.getElementById("numTenants").value = 1; try { refreshRoomCapacityInfo(); } catch (_) {}
         initGuestDropdowns();
     }
     window.LK_prepareAddTenantModal = prepareAddTenantModal;
@@ -1370,7 +1433,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("tPg")?.addEventListener("change", function() {
         const pgId = this.value;
         if (pgId) {
-            loadRoomDropdown(pgId, "tRoom");
+            loadRoomDropdown(pgId, "tRoom", null, true);
         } else {
             document.getElementById("tRoom").innerHTML = `<option value="">Select room...</option>`;
         }
@@ -1457,7 +1520,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="col-md-3 tenant-international-only d-none">
                         <label class="form-label">International phone</label>
                         <input type="text" class="form-control tenant-international-phone" placeholder="+1 234 567 8900">
-                        <div class="form-text">Family or emergency contact abroad</div>
+                        <div class="form-text">The tenant\u2019s own second number, with country code (e.g. +255 712 345 678). Used if the main number has no WhatsApp. Never the parent\u2019s number.</div>
                     </div>
 
                     <div class="col-12"><div class="fs-sub"><i class="bi bi-wallet2"></i>Stay &amp; payment</div></div>
@@ -1942,7 +2005,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 document.getElementById("tRoom").value = t.room_number || '';
             }
 
-            document.getElementById("numTenants").value = 1;
+            document.getElementById("numTenants").value = 1; try { refreshRoomCapacityInfo(); } catch (_) {}
             generateTenantEntries(1);
 
             const entry = document.querySelector('.tenant-entry');
@@ -2185,13 +2248,17 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 const docRes = await API.documents.admin.getByTenant(id);
                 const docTypes = t.residency === 'national'
-                    ? ['passport_photo', 'signature', 'tenant_aadhaar', 'parent_aadhaar', 'university_id', 'agreement']
+                    ? NATIONAL_DOC_KEYS
                     : ['passport_photo', 'signature', 'passport', 'visa', 'arrival_stamp', 'c_form', 'efrro', 'university_id', 'agreement'];
 
                 const docLabels = {
                     'passport_photo': 'Passport Size Photo',
                     'signature': 'Signature',
-                    'tenant_aadhaar': 'Aadhaar Card',
+                    'tenant_aadhaar_front': 'Tenant Aadhaar (Front)',
+                    'tenant_aadhaar_back': 'Tenant Aadhaar (Back)',
+                    'parent_aadhaar_front': 'Parent Aadhaar (Front)',
+                    'parent_aadhaar_back': 'Parent Aadhaar (Back)',
+                    'tenant_aadhaar': 'Tenant Aadhaar',
                     'parent_aadhaar': 'Parent Aadhaar',
                     'university_id': 'University ID',
                     'passport': 'Passport',
@@ -2225,13 +2292,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 
                 // Update document cache with this tenant's status
                 const requiredTypes = getRequiredDocumentTypes(t.residency || 'national');
-                const missing = requiredTypes.filter(type => !uploadedTypes.includes(type));
+                const missing = requiredTypes.filter(type => !hasDocType(uploadedTypes, type));
                 documentStatusCache[id] = missing.length === 0;
                 updatePendingDocsBadge();
 
                 const renderDocCard = (key) => {
-                    const has = uploadedTypes.includes(key);
-                    const doc = docs.find(d => d.document_type === key);
+                    const has = !!hasDocType(uploadedTypes, key);
+                    const doc = docs.find(d => d.document_type === key) || (DOC_LEGACY_ALIAS[key] ? docs.find(d => d.document_type === DOC_LEGACY_ALIAS[key]) : undefined);
                     const dUrl = (doc?.document_url || '').toLowerCase();
                     const isPdfDoc = has && (dUrl.includes('.pdf') || dUrl.includes('/raw/') || (doc?.mime_type && String(doc.mime_type).toLowerCase().includes('pdf')) ||
                         (key === 'agreement' && !dUrl.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i)));
@@ -2569,6 +2636,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     : `<button class="btn btn-soft-danger" onclick="blockTenant('${t.id}', true)"><i class="bi bi-slash-circle me-1"></i>Block</button>`;
                 foot += `<button class="btn btn-outline-brand" onclick="viewModalEditTenant('${t.id}')"><i class="bi bi-pencil me-1"></i>Edit</button>`;
             }
+            if (window.LK_IS_SUPER_ADMIN) {
+                foot += `<button class="btn btn-outline-brand" onclick="resetTenantPassword('${t.id}', true)"><i class="bi bi-key me-1"></i>Reset password</button>`;
+            }
             foot += '<button class="btn btn-brand" data-bs-dismiss="modal">Close</button>';
             document.getElementById("viewTenantFooter").innerHTML = foot;
         } catch (e) {
@@ -2609,6 +2679,25 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) { err.textContent = e.message || "Could not block the tenant."; err.classList.remove("d-none"); }
         this.disabled = false;
     });
+
+    // Super admin only: generate a new temporary password and send it to the tenant (WhatsApp / SMS / email).
+    window.resetTenantPassword = async function(id, fromView) {
+        if (!window.LK_IS_SUPER_ADMIN) { showToast("Only a super admin can reset passwords.", "warning"); return; }
+        const t = (allTenants || []).find(x => String(x.id) === String(id));
+        const who = t ? t.full_name : 'this tenant';
+        const ok = await LKUI.confirm({
+            title: `Reset password for ${who}?`,
+            body: 'A new temporary password is generated and sent to them by WhatsApp and email. Their current password stops working, they are signed out everywhere, and they must choose a new password when they sign in. You will not see the new password.',
+            confirmText: 'Reset and send', tone: 'warn', icon: 'bi-key'
+        });
+        if (!ok) return;
+        try {
+            const r = await API.tenants.resetPassword(id);
+            if (!r.success) throw new Error(r.message || "Could not reset the password");
+            if (fromView && viewModal) viewModal.hide();
+            showToast(r.message || "New password sent", "success");
+        } catch (e) { showToast(e.message || "Could not reset the password", "danger"); }
+    };
 
     window.unblockTenant = async function(id, fromView) {
         const t = (allTenants || []).find(x => String(x.id) === String(id));

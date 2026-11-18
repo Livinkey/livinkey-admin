@@ -394,7 +394,12 @@
                   </div>
                 </div>
               </div>
-              <div class="form-text mt-2">Pick the PG and room, choose how many people share it, then generate their detail forms.</div>
+              <div id="roomCapacityInfo" class="d-none mt-3 p-2 px-3 rounded-3 d-flex flex-wrap align-items-center gap-2" style="background:rgba(146,194,74,.12);border:1px solid rgba(146,194,74,.35);">
+                <i class="bi bi-people"></i>
+                <span id="roomCapacityText" class="small"></span>
+                <button type="button" class="btn btn-sm btn-outline-brand ms-auto" id="editRoomCapacityBtn"><i class="bi bi-pencil me-1"></i>Change tenants allowed</button>
+              </div>
+              <div class="form-text mt-2">Pick the PG and room, choose how many people share it, then generate their detail forms. A room that is full can still be chosen: use "Change tenants allowed" to raise its limit.</div>
             </div>
 
             <!-- Tenant Entries Container -->

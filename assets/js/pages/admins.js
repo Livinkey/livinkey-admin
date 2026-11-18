@@ -81,6 +81,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 <td class="text-end text-nowrap">
                     <button class="btn-icon me-1" title="Permissions" onclick="openAccess('${X(a.id)}')"><i class="bi bi-shield-lock"></i></button>
                     <button class="btn-icon me-1" title="Edit" onclick="editAdmin('${X(a.id)}')"><i class="bi bi-pencil"></i></button>
+                    ${String(a.id) !== String((window.LK_ME || {}).id) ? `<button class="btn-icon me-1" title="Reset password (sends new login details)" onclick="resetAdminPassword('${X(a.id)}')"><i class="bi bi-key"></i></button>` : ''}
                     <button class="btn-icon danger" title="Delete" onclick="deleteAdmin('${X(a.id)}')"><i class="bi bi-trash3"></i></button>
                 </td>
             </tr>`;
@@ -412,6 +413,24 @@ document.addEventListener("DOMContentLoaded", () => {
     // DELETE ADMIN - FIXED
     // ============================================
     const confirmModal = new bootstrap.Modal(document.getElementById("confirmModal"));
+
+    // Super admin only (this whole page is). Generates a new temporary password and sends it to that admin.
+    window.resetAdminPassword = async function(id) {
+        const a = adminData.find(x => String(x.id) === String(id));
+        if (!a) { showToast("Admin not found. Please refresh the page and try again.", "danger"); return; }
+        const ok = await LKUI.confirm({
+            title: `Reset password for ${a.name || 'this admin'}?`,
+            body: 'A new temporary password is generated and sent to them by WhatsApp and email. Their current password stops working, they are signed out everywhere, and they must choose a new password at their next sign-in. You will not see the new password.',
+            confirmText: 'Reset and send', tone: 'warn', icon: 'bi-key'
+        });
+        if (!ok) return;
+        try {
+            const r = await API.admins.resetPassword(id);
+            if (!r.success) throw new Error(r.message || "Could not reset the password");
+            showToast(r.message || "New password sent", "success");
+            await (typeof loadAdmins === 'function' ? loadAdmins() : Promise.resolve());
+        } catch (e) { showToast(e.message || "Could not reset the password", "danger"); }
+    };
 
     window.deleteAdmin = function(id) {
         // Convert id to string for safe comparison
